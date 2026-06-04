@@ -1096,9 +1096,158 @@
         return msgDiv.querySelector('.message-bubble');
     }
 
+    // ==================== JSON Formatting ====================
+    function formatJsonToMarkdown(obj, level = 0) {
+        if (obj === null || obj === undefined) return '';
+        if (typeof obj === 'string') {
+            // Check if string contains markdown-like content
+            if (obj.includes('##') || obj.includes('**') || obj.includes('•') || obj.includes('```')) {
+                return obj;
+            }
+            return obj;
+        }
+        if (typeof obj === 'number' || typeof obj === 'boolean') {
+            return String(obj);
+        }
+
+        let md = '';
+        const indent = '  '.repeat(level);
+
+        if (Array.isArray(obj)) {
+            if (obj.length === 0) return '';
+            // Check if array items are simple strings
+            if (obj.every(item => typeof item === 'string')) {
+                return obj.map(item => `• ${item}`).join('\n');
+            }
+            // Array of objects (like teaching stages)
+            obj.forEach((item, idx) => {
+                if (typeof item === 'object' && item !== null) {
+                    md += formatJsonToMarkdown(item, level) + '\n\n';
+                } else {
+                    md += `${indent}• ${formatJsonToMarkdown(item, level + 1)}\n`;
+                }
+            });
+            return md;
+        }
+
+        if (typeof obj === 'object') {
+            const entries = Object.entries(obj);
+            entries.forEach(([key, value]) => {
+                const displayKey = translateKey(key);
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    md += `${indent}**${displayKey}**\n\n${formatJsonToMarkdown(value, level + 1)}\n\n`;
+                } else if (Array.isArray(value)) {
+                    md += `${indent}**${displayKey}**\n\n${formatJsonToMarkdown(value, level + 1)}\n\n`;
+                } else if (typeof value === 'string' && value.length > 80) {
+                    md += `${indent}**${displayKey}**：${value}\n\n`;
+                } else {
+                    md += `${indent}**${displayKey}**：${value}\n\n`;
+                }
+            });
+        }
+        return md;
+    }
+
+    function translateKey(key) {
+        const map = {
+            'subject': '学科',
+            'topic': '课题',
+            'grade': '年级',
+            'lesson_hours': '课时',
+            'lesson_type': '课型',
+            'style_preference': '风格偏好',
+            'key_concerns': '关注要点',
+            'compactness': '紧凑度',
+            'interactivity': '互动度',
+            'depth': '知识深度',
+            'interest': '趣味性',
+            'rigor': '严谨性',
+            'innovation': '创新性',
+            'warmth': '亲和度',
+            'basic': '基础层',
+            'intermediate': '进阶层',
+            'advanced': '拓展层',
+            'knowledge': '知识目标',
+            'skill': '能力目标',
+            'emotion': '素养目标',
+            'key_point': '教学重点',
+            'difficult_points': '教学难点',
+            'content': '内容',
+            'reason': '理由',
+            'strategy': '策略',
+            'breakthrough_strategy': '突破策略',
+            'scaffolding': '脚手架',
+            'teacher_activity': '教师活动',
+            'student_activity': '学生活动',
+            'design_intent': '设计意图',
+            'transition': '过渡语',
+            'tier_notes': '分层说明',
+            'stage': '环节',
+            'duration': '时长',
+            'core_literacy_links': '核心素养关联',
+            'common_misconceptions': '常见误区',
+        };
+        return map[key] || key;
+    }
+
+    function tryParseJson(text) {
+        if (!text) return null;
+        // Try to find JSON object/array in text
+        const trimmed = text.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+                return JSON.parse(trimmed);
+            } catch (e) {
+                // Try with relaxed parsing - sometimes JSON has trailing content
+                let depth = 0;
+                let inString = false;
+                let escape = false;
+                let endIdx = 0;
+                for (let i = 0; i < trimmed.length; i++) {
+                    const ch = trimmed[i];
+                    if (escape) { escape = false; continue; }
+                    if (ch === '\\') { escape = true; continue; }
+                    if (ch === '"' && !inString) { inString = true; }
+                    else if (ch === '"' && inString) { inString = false; }
+                    else if (!inString) {
+                        if (ch === '{' || ch === '[') depth++;
+                        else if (ch === '}' || ch === ']') {
+                            depth--;
+                            if (depth === 0) { endIdx = i + 1; break; }
+                        }
+                    }
+                }
+                if (endIdx > 0) {
+                    try {
+                        return JSON.parse(trimmed.slice(0, endIdx));
+                    } catch (e2) {
+                        return null;
+                    }
+                }
+                return null;
+            }
+        }
+        return null;
+    }
+
     // ==================== Markdown Rendering ====================
     function renderMarkdown(text) {
         if (!text) return '';
+
+        // Try to parse as JSON first
+        const jsonObj = tryParseJson(text);
+        if (jsonObj !== null) {
+            const formatted = formatJsonToMarkdown(jsonObj);
+            const html = marked.parse(formatted, { breaks: true, gfm: true });
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            temp.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+            return temp.innerHTML;
+        }
+
         try {
             const html = marked.parse(text, { breaks: true, gfm: true });
             const temp = document.createElement('div');
