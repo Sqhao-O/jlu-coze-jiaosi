@@ -5,6 +5,10 @@ project_type = "backend"
 [preview]
 preview_enable = "disabled"
 
+[dev]
+build = ["bash", "projects/scripts/setup.sh"]
+run = ["bash", "projects/scripts/http_run.sh"]
+
 [deploy]
 build = ["bash", "projects/scripts/setup.sh"]
 run = ["bash", "projects/scripts/http_run.sh"]
