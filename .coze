@@ -3,7 +3,7 @@ requires = ["python-3.12"]
 project_type = "backend"
 
 [preview]
-preview_enable = "disabled"
+preview_enable = "enabled"
 
 [dev]
 build = ["bash", "projects/scripts/setup.sh"]
