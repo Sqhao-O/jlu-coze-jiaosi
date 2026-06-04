@@ -38,9 +38,30 @@ def get_db_url() -> str:
 _engine = None
 _SessionLocal = None
 
+def _create_sqlite_fallback():
+    """创建 SQLite 内存数据库作为降级方案（开发/预览环境）"""
+    import tempfile
+    db_path = os.path.join(tempfile.gettempdir(), 'vibe_coding_dev.db')
+    logger.warning(f"PGDATABASE_URL not set, using SQLite fallback: {db_path}")
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        pool_pre_ping=True,
+        connect_args={"check_same_thread": False},
+    )
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return engine
+    except Exception as e:
+        logger.error(f"SQLite fallback also failed: {e}")
+        raise
+
 def _create_engine_with_retry():
     url = get_db_url()
     if url is None or url == "":
+        # 开发/预览环境降级为 SQLite
+        if os.getenv("COZE_PROJECT_ENV") == "DEV" or os.getenv("DEV_MODE") == "1":
+            return _create_sqlite_fallback()
         logger.error("PGDATABASE_URL is not set")
         raise ValueError("PGDATABASE_URL is not set")
     size = 100

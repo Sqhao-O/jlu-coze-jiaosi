@@ -10,6 +10,9 @@ cd "$PROJECT_DIR"
 
 PORT="${DEPLOY_RUN_PORT:-5000}"
 
+# 开发/预览环境标识，启用数据库降级
+export DEV_MODE="1"
+
 usage() {
   echo "用法: $0 -p <端口>"
 }
