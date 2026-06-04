@@ -1051,11 +1051,8 @@ def node_format_output(state: LessonPrepState) -> dict:
 
     final_plan = "\n\n".join(plan_parts)
 
-    # 压缩过长教案
-    if len(final_plan) > 2000:
-        lesson_plan_draft = final_plan[:500] + "\n\n...(教案较长，已压缩。完整版可通过变量获取)...\n\n" + final_plan[-500:]
-    else:
-        lesson_plan_draft = final_plan
+    # 不再压缩教案，保留完整内容
+    lesson_plan_draft = final_plan
 
     return {
         "final_lesson_plan": final_plan,

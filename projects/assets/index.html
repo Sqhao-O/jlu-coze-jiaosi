@@ -1400,7 +1400,7 @@
             }
 
             const data = await response.json();
-            const fullText = data.choices?.[0]?.message?.content || '（未获取到回复）';
+            var fullText = data.choices?.[0]?.message?.content || '（未获取到回复）';
 
             // Typewriter animation: display formatted Markdown character by character
             const totalLen = fullText.length;
@@ -1437,13 +1437,15 @@
             });
 
         } catch (err) {
-            console.error('Stream request error:', err);
+            console.error('Request error:', err);
             streamBubble.innerHTML = renderMarkdown(`⚠️ 请求失败: ${err.message}\n\n可能原因:\n• 服务连接异常\n• 请求超时（AI 工作流需要 60-120 秒）`);
         }
 
         scrollToBottom();
-        messageHistory.push({ role: 'assistant', content: fullText });
-        currentSession.messages.push({ role: 'assistant', content: fullText });
+        if (typeof fullText !== 'undefined' && fullText) {
+            messageHistory.push({ role: 'assistant', content: fullText });
+            currentSession.messages.push({ role: 'assistant', content: fullText });
+        }
     }
 </script>
 

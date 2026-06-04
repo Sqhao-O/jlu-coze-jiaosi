@@ -92,7 +92,7 @@ def _value_to_md(val, depth: int = 0) -> str:
                     # 列表中的对象 → 子标题+内容
                     lines.append(f"\n{'#' * (depth + 2)} {zh_key}\n")
                     for idx, item in enumerate(v, 1):
-                        lines.append(f"\n{'#' * (depth + 3)} {zh_key.rstrip('点')} {idx}\n")
+                        lines.append(f"\n{'#' * (depth + 3)} 第 {idx} 项\n")
                         lines.append(_value_to_md(item, depth + 3))
                 else:
                     lines.append(f"\n{'#' * (depth + 2)} {zh_key}\n")
