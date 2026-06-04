@@ -11,7 +11,8 @@ import cozeloop
 import uvicorn
 import time
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
@@ -285,9 +286,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+# 静态文件目录（项目根目录下的 assets）
+import os
+ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+
+
 @app.get("/")
 async def root():
-    """根路径 - 预览/健康检查入口"""
+    """根路径 - 返回前端页面"""
+    index_path = os.path.join(ASSETS_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
     return {
         "service": "vibe-coding",
         "status": "running",
@@ -601,6 +610,10 @@ async def health_check():
 @app.get(path="/graph_parameter")
 async def http_graph_inout_parameter(request: Request):
     return service.graph_inout_schema()
+
+# 挂载静态文件（前端资源）
+if os.path.isdir(ASSETS_DIR):
+    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Start FastAPI server")
