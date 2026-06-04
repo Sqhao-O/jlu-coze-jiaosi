@@ -1379,91 +1379,71 @@
 
     async function sendStreamRequest(content) {
         const streamBubble = createStreamMessageElement();
-        const cursor = streamBubble.querySelector('.stream-cursor');
-        let accumulatedText = '';
-        let nodeIndex = 0;
         updateNodeProgress(WORKFLOW_NODES[0].id, 'running');
+        let nodeIdx = 0;
 
-        const response = await fetch('/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'vibe-coding',
-                messages: [{ role: 'user', content }],
-                stream: true,
-                session_id: sessionId
-            })
-        });
+        try {
+            const response = await fetch('/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'vibe-coding',
+                    messages: [{ role: 'user', content }],
+                    stream: false,
+                    session_id: sessionId
+                })
+            });
 
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.error?.message || `HTTP ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let lastNodeUpdate = 0;
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                if (!line.trim() || !line.startsWith('data:')) continue;
-                const data = line.slice(5).trim();
-                if (data === '[DONE]') continue;
-
-                try {
-                    const parsed = JSON.parse(data);
-                    let text = '';
-
-                    if (parsed.choices && parsed.choices[0]) {
-                        const delta = parsed.choices[0].delta;
-                        if (delta) {
-                            text = delta.content || '';
-                        }
-                    }
-
-                    if (text) {
-                        accumulatedText += text;
-                        // Update display
-                        const html = renderMarkdown(accumulatedText);
-                        streamBubble.innerHTML = html + '<span class="stream-cursor"></span>';
-                        scrollToBottom();
-
-                        // Update node progress based on text length
-                        const progress = Math.min(accumulatedText.length / 1000, 1);
-                        const targetIndex = Math.floor(progress * WORKFLOW_NODES.length);
-                        if (targetIndex > lastNodeUpdate && targetIndex < WORKFLOW_NODES.length) {
-                            if (lastNodeUpdate >= 0) {
-                                updateNodeProgress(WORKFLOW_NODES[lastNodeUpdate].id, 'completed');
-                            }
-                            updateNodeProgress(WORKFLOW_NODES[targetIndex].id, 'running');
-                            lastNodeUpdate = targetIndex;
-                        }
-                    }
-                } catch (e) {
-                    // Ignore
-                }
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${response.status}`);
             }
+
+            const data = await response.json();
+            const fullText = data.choices?.[0]?.message?.content || '（未获取到回复）';
+
+            // Typewriter animation: display formatted Markdown character by character
+            const totalLen = fullText.length;
+            let displayed = 0;
+            const CHUNK = 8; // chars per tick
+
+            await new Promise(resolve => {
+                const tick = () => {
+                    displayed = Math.min(displayed + CHUNK, totalLen);
+                    const partialText = fullText.slice(0, displayed);
+
+                    // Update node progress
+                    const progress = displayed / totalLen;
+                    const targetIdx = Math.min(Math.floor(progress * WORKFLOW_NODES.length), WORKFLOW_NODES.length - 1);
+                    while (nodeIdx <= targetIdx) {
+                        updateNodeProgress(WORKFLOW_NODES[nodeIdx].id, 'completed');
+                        nodeIdx++;
+                    }
+
+                    const html = renderMarkdown(partialText);
+                    streamBubble.innerHTML = html;
+
+                    if (displayed < totalLen) {
+                        requestAnimationFrame(tick);
+                    } else {
+                        // Mark all nodes completed
+                        for (let i = nodeIdx; i < WORKFLOW_NODES.length; i++) {
+                            updateNodeProgress(WORKFLOW_NODES[i].id, 'completed');
+                        }
+                        resolve();
+                    }
+                };
+                requestAnimationFrame(tick);
+            });
+
+        } catch (err) {
+            console.error('Stream request error:', err);
+            streamBubble.innerHTML = renderMarkdown(`⚠️ 请求失败: ${err.message}\n\n可能原因:\n• 服务连接异常\n• 请求超时（AI 工作流需要 60-120 秒）`);
         }
 
-        // Complete all nodes
-        WORKFLOW_NODES.forEach((n, i) => {
-            updateNodeProgress(n.id, i <= lastNodeUpdate ? 'completed' : 'pending');
-        });
-
-        // Final render
-        streamBubble.innerHTML = renderMarkdown(accumulatedText);
-        addCopyButtons(streamBubble);
-
-        messageHistory.push({ role: 'assistant', content: accumulatedText });
-        currentSession.messages.push({ role: 'assistant', content: accumulatedText });
+        scrollToBottom();
+        messageHistory.push({ role: 'assistant', content: fullText });
+        currentSession.messages.push({ role: 'assistant', content: fullText });
     }
 </script>
 

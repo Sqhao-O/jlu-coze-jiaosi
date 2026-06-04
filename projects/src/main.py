@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
+from coze_coding_dev_sdk import LLMClient
 from coze_coding_utils.runtime_ctx.context import new_context, Context
 from coze_coding_utils.helper import graph_helper
 from coze_coding_utils.log.node_log import LOG_FILE
@@ -56,6 +57,143 @@ from coze_coding_utils.log.loop_trace import init_run_config, init_agent_config
 
 # 超时配置常量
 TIMEOUT_SECONDS = 900  # 15分钟
+
+# === JSON → Markdown 格式化工具 ===
+
+KEY_ZH_MAP = {
+    "subject": "学科", "topic": "课题", "grade": "年级", "lesson_hours": "课时",
+    "lesson_type": "课型", "style_preference": "风格偏好", "key_concerns": "关注要点",
+    "key_point": "教学重点", "difficult_points": "教学难点", "common_misconceptions": "常见误区",
+    "teaching_objectives": "教学目标", "teaching_style": "教学风格", "style_profile": "风格画像",
+    "teaching_process": "教学过程", "board_design": "板书设计", "stage": "教学环节",
+    "duration": "时长", "teacher_activity": "教师活动", "student_activity": "学生活动",
+    "design_intent": "设计意图", "transition": "过渡语", "tier_notes": "分层要求",
+    "basic": "基础层", "intermediate": "进阶层", "advanced": "拓展层",
+    "knowledge": "知识目标", "skill": "能力目标", "emotion": "情感目标",
+    "content": "内容", "reason": "原因", "strategy": "策略", "breakthrough_strategy": "突破策略",
+    "scaffolding": "脚手架", "main_board": "主板书", "side_board": "副板书", "layout": "布局",
+    "core_literacy_links": "核心素养链接", "7维教学风格向量": "7维教学风格向量",
+    "风格描述": "风格描述", "compactness": "紧凑度", "interactivity": "互动度",
+    "depth": "知识深度", "interest": "趣味性", "rigor": "严谨度",
+    "innovation": "创新度", "warmth": "温暖度",
+}
+
+def _translate_key(key: str) -> str:
+    return KEY_ZH_MAP.get(key, key)
+
+def _value_to_md(val, depth: int = 0) -> str:
+    """递归将 Python 对象转为 Markdown 文本"""
+    if isinstance(val, dict):
+        lines = []
+        for k, v in val.items():
+            zh_key = _translate_key(k)
+            if isinstance(v, (dict, list)):
+                if isinstance(v, list) and v and isinstance(v[0], dict):
+                    # 列表中的对象 → 子标题+内容
+                    lines.append(f"\n{'#' * (depth + 2)} {zh_key}\n")
+                    for idx, item in enumerate(v, 1):
+                        lines.append(f"\n{'#' * (depth + 3)} {zh_key.rstrip('点')} {idx}\n")
+                        lines.append(_value_to_md(item, depth + 3))
+                else:
+                    lines.append(f"\n{'#' * (depth + 2)} {zh_key}\n")
+                    lines.append(_value_to_md(v, depth + 2))
+            else:
+                lines.append(f"**{zh_key}**：{v}\n")
+        return "\n".join(lines)
+    elif isinstance(val, list):
+        lines = []
+        for idx, item in enumerate(val, 1):
+            if isinstance(item, dict):
+                lines.append(f"\n**{idx}.** {_value_to_md(item, depth + 1)}\n")
+            else:
+                lines.append(f"- {item}\n")
+        return "\n".join(lines)
+    else:
+        return str(val)
+
+def _extract_json_strings(text: str) -> list:
+    """从混合文本中提取所有 JSON 字符串（对象或数组）"""
+    results = []
+    i = 0
+    while i < len(text):
+        if text[i] in ('{', '['):
+            start = i
+            depth = 0
+            in_str = False
+            escape = False
+            j = i
+            while j < len(text):
+                ch = text[j]
+                if escape:
+                    escape = False
+                elif ch == '\\' and in_str:
+                    escape = True
+                elif ch == '"' and not escape:
+                    in_str = not in_str
+                elif not in_str:
+                    if ch in ('{', '['):
+                        depth += 1
+                    elif ch in ('}', ']'):
+                        depth -= 1
+                        if depth == 0:
+                            candidate = text[start:j + 1]
+                            try:
+                                obj = json.loads(candidate)
+                                results.append((start, j + 1, obj))
+                            except (json.JSONDecodeError, ValueError):
+                                pass
+                            i = j + 1
+                            break
+                j += 1
+            else:
+                i += 1
+        else:
+            i += 1
+    return results
+
+def format_teaching_content(content: str) -> str:
+    """将混合格式内容（含JSON和文本）转为结构化 Markdown"""
+    # 检测内容中是否包含 JSON
+    json_parts = _extract_json_strings(content)
+    if not json_parts:
+        return content
+
+    # 替换每个 JSON 片段为 Markdown
+    result_parts = []
+    last_end = 0
+    has_meaningful_json = False
+
+    for start, end, obj in json_parts:
+        # 保留 JSON 前的非 JSON 文本
+        if start > last_end:
+            between = content[last_end:start].strip()
+            if between:
+                result_parts.append(between)
+
+        # 只转换有实质内容的 JSON（跳过小型配置类 JSON）
+        obj_str = json.dumps(obj, ensure_ascii=False)
+        if len(obj_str) > 50:  # 有实质内容
+            has_meaningful_json = True
+            md = _value_to_md(obj, depth=0)
+            result_parts.append(md)
+        # 小 JSON 跳过（如 {"last_action": "xxx"}）
+
+        last_end = end
+
+    # 保留最后的非 JSON 文本
+    if last_end < len(content):
+        remaining = content[last_end:].strip()
+        if remaining:
+            result_parts.append(remaining)
+
+    if not has_meaningful_json:
+        return content
+
+    # 组合结果
+    full_md = "\n\n---\n\n".join(result_parts)
+
+    # 添加文档标题
+    return f"# 📚 教学方案\n\n{full_md}"
 
 class GraphService:
     def __init__(self):
@@ -105,6 +243,188 @@ class GraphService:
         for chunk in stream_runner.stream(payload, graph, run_config, ctx):
             yield chunk
 
+    @staticmethod
+    def _is_json_like_string(value: Any) -> bool:
+        """Check if a value looks like a JSON string."""
+        if not isinstance(value, str):
+            return False
+        trimmed = value.strip()
+        return (trimmed.startswith("{") and trimmed.endswith("}")) or \
+               (trimmed.startswith("[") and trimmed.endswith("]"))
+
+    @staticmethod
+    def _format_json_value(value: Any) -> str:
+        """Try to parse a JSON string and return formatted Markdown."""
+        if not isinstance(value, str):
+            return str(value) if value is not None else ""
+        trimmed = value.strip()
+        if not ((trimmed.startswith("{") and trimmed.endswith("}")) or
+                (trimmed.startswith("[") and trimmed.endswith("]"))):
+            return value
+        try:
+            import json
+            data = json.loads(trimmed)
+            return GraphService._json_to_markdown(data)
+        except Exception:
+            return value
+
+    @staticmethod
+    def _json_to_markdown(data: Any, level: int = 0) -> str:
+        """Recursively convert JSON data to Markdown."""
+        if data is None:
+            return ""
+        if isinstance(data, str):
+            return data
+        if isinstance(data, (int, float, bool)):
+            return str(data)
+
+        indent = "  " * level
+        lines = []
+
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    # Object in list: render as sub-section
+                    item_md = GraphService._json_to_markdown(item, level + 1)
+                    lines.append(f"{indent}- {item_md.strip()}")
+                else:
+                    lines.append(f"{indent}- {GraphService._json_to_markdown(item, level + 1)}")
+            return "\n".join(lines)
+
+        if isinstance(data, dict):
+            for key, val in data.items():
+                display_key = GraphService._translate_key(key)
+                if isinstance(val, dict):
+                    lines.append(f"{indent}**{display_key}**\n")
+                    lines.append(GraphService._json_to_markdown(val, level + 1))
+                elif isinstance(val, list):
+                    lines.append(f"{indent}**{display_key}**\n")
+                    for item in val:
+                        if isinstance(item, dict):
+                            item_md = GraphService._json_to_markdown(item, level + 1)
+                            lines.append(f"{indent}- {item_md.strip()}")
+                        else:
+                            lines.append(f"{indent}- {GraphService._json_to_markdown(item, level + 1)}")
+                elif isinstance(val, str) and len(val) > 100:
+                    lines.append(f"{indent}**{display_key}**：{val}\n")
+                else:
+                    lines.append(f"{indent}**{display_key}**：{val}\n")
+            return "\n".join(lines)
+
+        return str(data)
+
+    @staticmethod
+    def _translate_key(key: str) -> str:
+        """Translate English keys to Chinese."""
+        mapping = {
+            "subject": "学科",
+            "topic": "课题",
+            "grade": "年级",
+            "lesson_hours": "课时",
+            "lesson_type": "课型",
+            "style_preference": "风格偏好",
+            "key_concerns": "关注要点",
+            "compactness": "紧凑度",
+            "interactivity": "互动度",
+            "depth": "知识深度",
+            "interest": "趣味性",
+            "rigor": "严谨性",
+            "innovation": "创新性",
+            "warmth": "亲和度",
+            "basic": "基础层",
+            "intermediate": "进阶层",
+            "advanced": "拓展层",
+            "knowledge": "知识目标",
+            "skill": "能力目标",
+            "emotion": "素养目标",
+            "key_point": "教学重点",
+            "difficult_points": "教学难点",
+            "content": "内容",
+            "reason": "理由",
+            "strategy": "策略",
+            "breakthrough_strategy": "突破策略",
+            "scaffolding": "脚手架",
+            "teacher_activity": "教师活动",
+            "student_activity": "学生活动",
+            "design_intent": "设计意图",
+            "transition": "过渡语",
+            "tier_notes": "分层说明",
+            "stage": "环节",
+            "duration": "时长(分钟)",
+            "core_literacy_links": "核心素养关联",
+            "common_misconceptions": "常见误区",
+            "core_literacy": "核心素养",
+            "teaching_objectives": "教学目标",
+            "teaching_process": "教学过程",
+            "reflection": "教学反思",
+            "teaching_resources": "教学资源",
+            "assessment": "教学评价",
+        }
+        return mapping.get(key, key)
+
+    async def _format_output(self, result: Dict[str, Any], ctx) -> Dict[str, Any]:
+        """Format output to beautiful Markdown using an LLM agent."""
+        if not isinstance(result, dict):
+            return result
+
+        # Find the output content field - look for any long string value
+        content = None
+        content_key = None
+        for key in ["output", "result", "content", "response", "answer", "data", "message"]:
+            if key in result and isinstance(result[key], str) and len(result[key]) > 50:
+                content = result[key]
+                content_key = key
+                break
+
+        # Fallback: find any long string value
+        if content is None:
+            for key, val in result.items():
+                if isinstance(val, str) and len(val) > 50:
+                    content = val
+                    content_key = key
+                    break
+
+        if content is None:
+            return result
+
+        try:
+            client = LLMClient(ctx=ctx)
+            system_prompt = """你是一个专业的教学文档排版助手。你的任务是将输入的内容（可能包含JSON、混合格式文本等）转换为结构清晰、排版美观的纯Markdown格式文档。
+
+要求：
+1. 将所有JSON数据转换为Markdown格式：对象用标题和列表，数组用列表，键名翻译为中文
+2. 已有的Markdown内容保持并优化排版
+3. 使用Markdown标题层级（#、##、###）组织文档结构
+4. 教学环节使用表格呈现（环节、时长、教师活动、学生活动、设计意图）
+5. 知识点、重难点使用列表和引用块呈现
+6. 在文档开头添加一个简短的总体概述
+7. 输出纯Markdown文本，不要添加任何解释性文字或代码块包裹"""
+
+            user_prompt = f"请将以下教学数据转换为美观的Markdown文档：\n\n{content}"
+
+            from langchain_core.messages import SystemMessage, HumanMessage
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+
+            llm_response = await asyncio.wait_for(
+                asyncio.to_thread(client.invoke, messages=messages, model="doubao-seed-2-0-lite-260215", temperature=0.3, max_completion_tokens=8000),
+                timeout=60.0
+            )
+
+            if llm_response and hasattr(llm_response, 'content') and llm_response.content:
+                result_copy = dict(result)
+                result_copy[content_key] = llm_response.content.strip()
+                result_copy["_formatted"] = True
+                return result_copy
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Output formatting failed: {e}")
+            return result
+
     # 同步运行：本地/HTTP 通用
     async def run(self, payload: Dict[str, Any], ctx=None) -> Dict[str, Any]:
         if ctx is None:
@@ -120,7 +440,11 @@ class GraphService:
 
             # 直接调用，LangGraph会在当前任务上下文中执行
             # 如果当前任务被取消，LangGraph的执行也会被取消
-            return await graph.ainvoke(payload, config=run_config, context=ctx)
+            result = await graph.ainvoke(payload, config=run_config, context=ctx)
+
+            # Format JSON output to Markdown (disabled - handled in openai_chat_completions instead)
+            # result = await self._format_output(result, ctx)
+            return result
 
         except asyncio.CancelledError:
             logger.info(f"Run {run_id} was cancelled")
@@ -587,7 +911,27 @@ async def openai_chat_completions(request: Request):
 
     try:
         payload = await request.json()
-        return await openai_handler.handle(payload, ctx)
+        result = await openai_handler.handle(payload, ctx)
+
+        # Format JSON content in the response to readable Markdown
+        # result may be JSONResponse (has body) or dict
+        result_body = result
+        if hasattr(result, 'body'):
+            result_body = json.loads(result.body)
+
+        if isinstance(result_body, dict) and "choices" in result_body:
+            for choice in result_body.get("choices", []):
+                msg = choice.get("message", {})
+                content = msg.get("content", "")
+                if isinstance(content, str) and len(content) > 100:
+                    try:
+                        msg["content"] = format_teaching_content(content)
+                    except Exception as fmt_err:
+                        logger.warning(f"Content formatting failed: {fmt_err}")
+
+            return JSONResponse(content=result_body)
+
+        return result
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error in openai_chat_completions: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON format")
