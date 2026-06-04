@@ -284,6 +284,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+
+@app.get("/")
+async def root():
+    """根路径 - 预览/健康检查入口"""
+    return {
+        "service": "vibe-coding",
+        "status": "running",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "endpoints": {
+            "POST /v1/chat/completions": "OpenAI 兼容对话接口",
+            "POST /run": "同步运行任务",
+            "POST /stream_run": "流式运行任务",
+            "POST /async_run": "异步运行任务",
+            "GET /health": "健康检查",
+            "GET /task/{task_id}": "查询任务状态",
+        },
+    }
+
+
 # OpenAI 兼容接口处理器
 openai_handler = OpenAIChatHandler(service)
 
