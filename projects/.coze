@@ -1,6 +1,12 @@
 [project]
+sub_id = "41cf8f3b"
+name = "vibe-coding"
 entrypoint = "src/main.py"
 requires = ["python-3.12"]
+project_type = "backend"
+
+[preview]
+preview_enable = "disabled"
 
 [dev]
 build = ["bash", "scripts/setup.sh"]

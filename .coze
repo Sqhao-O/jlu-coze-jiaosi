@@ -1,0 +1,13 @@
+[project]
+requires = ["python-3.12"]
+project_type = "backend"
+
+[preview]
+preview_enable = "disabled"
+
+[deploy]
+build = ["bash", "projects/scripts/setup.sh"]
+run = ["bash", "projects/scripts/http_run.sh"]
+
+[subprojects]
+path = ["projects"]
