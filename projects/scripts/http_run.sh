@@ -3,7 +3,11 @@
 set -e
 # 导出环境变量
 
-WORK_DIR="${COZE_WORKSPACE_PATH:-.}"
+# 基于脚本位置定位项目根目录（scripts/ 的上一级）
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
 PORT="${DEPLOY_RUN_PORT:-5000}"
 
 usage() {
@@ -28,8 +32,8 @@ while getopts "p:h" opt; do
 done
 
 # 激活 .venv（devbox 环境），deploy 无 .venv 则跳过
-if [ -f "${WORK_DIR}/.venv/bin/activate" ]; then
-  source "${WORK_DIR}/.venv/bin/activate"
+if [ -f "${PROJECT_DIR}/.venv/bin/activate" ]; then
+  source "${PROJECT_DIR}/.venv/bin/activate"
 fi
 
-python ${WORK_DIR}/src/main.py -m http -p $PORT
+python ${PROJECT_DIR}/src/main.py -m http -p $PORT

@@ -1,10 +1,15 @@
 #!/bin/bash
 set -eo pipefail
 
+# 基于脚本位置定位项目根目录（scripts/ 的上一级）
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
 # 初始化目录
 if [ "$COZE_PROJECT_ENV" = "DEV" ]; then
-  if [ ! -d "${COZE_WORKSPACE_PATH}/assets" ]; then
-    mkdir -p "${COZE_WORKSPACE_PATH}/assets"
+  if [ ! -d "${PROJECT_DIR}/assets" ]; then
+    mkdir -p "${PROJECT_DIR}/assets"
   fi
 fi
 
