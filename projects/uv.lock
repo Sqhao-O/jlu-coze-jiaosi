@@ -333,7 +333,7 @@ sdist = { url = "https://mirrors.aliyun.com/pypi/packages/6b/22/9a0f7b3374c9b141
 
 [[package]]
 name = "cozeloop"
-version = "0.1.25"
+version = "0.1.28"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
     { name = "apscheduler" },
@@ -343,9 +343,9 @@ dependencies = [
     { name = "jinja2" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/15/01/cec89992774740ee47d6f226337374dacebef1a63dcfc22f6ee812cb2cc1/cozeloop-0.1.25.tar.gz", hash = "sha256:b24c22fcfacfa2839dd4d0afd1ce57922c4147c00079dd60201edcc71aca5991" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/9e/cb/17baac72e1100bece6aa43d4896e046b9f72b5f15bd87efb0cde2d28f989/cozeloop-0.1.28.tar.gz", hash = "sha256:119fa314e71ce6ab6831ee0088c893484698fba7ae8a0008636bb49e65fced05" }
 wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/63/c0/6458877df08da5403b7d8eb9eb064be64b2c2f7180ea8ccbdc7e21eb8009/cozeloop-0.1.25-py3-none-any.whl", hash = "sha256:250a7e4b89c9c42f2992bef4ee9a046e6caa4834f791963adebf6a8a09c453eb" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/b4/73/d96e740836d7abef30949caebd7b5a076b1e614ec72b280fd278c336d38b/cozeloop-0.1.28-py3-none-any.whl", hash = "sha256:aff0dd9a985a6dcd8ba51940c1d7f4eab00b1783f686938084669d6b2938b89a" },
 ]
 
 [[package]]
@@ -2707,6 +2707,7 @@ dependencies = [
     { name = "rich" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -2721,9 +2722,9 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.40,<2" },
     { name = "chardet", specifier = ">=5.2,<6" },
     { name = "coze-coding-dev-sdk", specifier = ">0.5.0,<1" },
-    { name = "coze-coding-utils", specifier = ">=0.2.8,<1" },
+    { name = "coze-coding-utils", specifier = "==0.2.8" },
     { name = "coze-workload-identity", specifier = ">=0.1.4,<1" },
-    { name = "cozeloop", specifier = ">=0.1.25,<1" },
+    { name = "cozeloop", specifier = "==0.1.28" },
     { name = "docx2python", specifier = ">=3.5,<4" },
     { name = "fastapi", specifier = ">=0.121,<1" },
     { name = "jinja2", specifier = ">=3.1,<4" },
@@ -2749,6 +2750,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14,<15" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "uvicorn", specifier = ">=0.38,<1" },
+    { name = "websockets", specifier = ">=11,<16" },
 ]
 
 [package.metadata.requires-dev]
