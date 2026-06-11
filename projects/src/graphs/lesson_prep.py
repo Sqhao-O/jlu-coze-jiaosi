@@ -118,6 +118,7 @@ MODE_NODE_MAP = {
     WorkflowMode.BLIND_SPOT:        "detect_blindspots",
     WorkflowMode.STUDENT_SIM:       "simulate_students",
     WorkflowMode.INTERACTION_DESIGN: "design_interactions",
+    WorkflowMode.PPT_GEN:           "generate_ppt",
 }
 
 
@@ -573,6 +574,77 @@ def node_design_interactions(state: LessonPrepState) -> dict:
 
 
 # ============================================================
+# 节点7: PPT 生成（调用 Coze Doc Maker 工作流）
+# ============================================================
+
+import asyncio
+from utils.ppt_client import call_ppt_workflow
+
+
+def node_generate_ppt(state: LessonPrepState) -> dict:
+    """PPT 生成：调用 Coze Doc Maker 工作流生成 .pptx 课件"""
+    logger.info("[PPT生成] 开始")
+
+    topic = _resolve_topic(state)
+    if not topic:
+        topic = "教学课件"
+
+    params = _extract_teacher_params(state)
+
+    # 调用 Coze 工作流
+    loop = asyncio.new_event_loop()
+    try:
+        ppt_url = loop.run_until_complete(
+            call_ppt_workflow(
+                topic=topic,
+                subject=params.get("subject", ""),
+                grade=params.get("grade", ""),
+                duration=state.get("lesson_duration", 45),
+                objectives=state.get("lesson_objectives", ""),
+                key_points=state.get("key_points", ""),
+                difficult_points=state.get("difficult_points", ""),
+                style=state.get("style_preference", ""),
+            )
+        )
+    except Exception as e:
+        logger.error(f"[PPT生成] 工作流调用失败: {e}")
+        ppt_url = ""
+    finally:
+        loop.close()
+
+    if not ppt_url:
+        return {"ppt_download_url": "", "final_output": "PPT 生成失败，请稍后重试。"}
+
+    # 生成大纲预览（让用户在下载前知道 PPT 包含什么内容）
+    preview = f"""## 📊 PPT 课件已生成
+
+**课题**: {topic}
+**学科**: {params.get('subject', '未指定')} | **年级**: {params.get('grade', '未指定')} | **课时**: {state.get('lesson_duration', 45)}分钟
+
+### PPT 包含以下页面
+
+1. 封面页：课题名称 + 学科 + 年级
+2. 教学目标页：三维目标
+3. 重难点页：重点 + 难点
+4. 教学过程概览页
+5. 各教学环节页：导入、新授、练习、小结
+6. 板书设计页
+7. 分层练习页
+8. 作业布置页
+9. 教学反思页
+
+### 下载
+
+📥 [点击下载 PPT 课件]({ppt_url})
+
+> PPT 由 Coze Doc Maker 生成，可直接用 PowerPoint / WPS 打开编辑。
+"""
+
+    logger.info(f"[PPT生成] 完成, url={ppt_url[:80]}...")
+    return {"ppt_download_url": ppt_url, "final_output": preview}
+
+
+# ============================================================
 # 节点8: 格式化输出（多模式）
 # ============================================================
 
@@ -931,6 +1003,7 @@ MODE_DATA_FIELD = {
     WorkflowMode.BLIND_SPOT:         "_blind_spot_json",
     WorkflowMode.STUDENT_SIM:        "_student_sim_json",
     WorkflowMode.INTERACTION_DESIGN: "_interaction_json",
+    WorkflowMode.PPT_GEN:            "_ppt_result_json",
 }
 
 
@@ -941,6 +1014,15 @@ def node_format_output(state: LessonPrepState) -> dict:
     # 闲聊：chat_reply 已通过 messages 流式推送文本，format_output 不再输出
     if intent == "chat":
         return {}
+
+    # PPT生成：特殊处理（大纲预览 + 下载链接）
+    if intent == "ppt_gen":
+        ppt_url = state.get("ppt_download_url", "")
+        ppt_outline = state.get("_ppt_outline_markdown", "")
+        if ppt_url:
+            download_section = f"\n\n---\n\n📥 **[点击下载 PPT 课件]({ppt_url})**\n"
+            return {"final_output": ppt_outline + download_section if ppt_outline else f"✅ PPT 课件已生成！\n\n📥 **[点击下载 PPT 课件]({ppt_url})**"}
+        return {"final_output": "PPT 生成失败，请重试。"}
 
     # 功能模式：JSON → Markdown
     data_field = MODE_DATA_FIELD.get(intent, "")
@@ -986,6 +1068,7 @@ def build_lesson_prep_graph() -> StateGraph:
     builder.add_node("detect_blindspots", node_detect_blindspots)
     builder.add_node("simulate_students", node_simulate_students)
     builder.add_node("design_interactions", node_design_interactions)
+    builder.add_node("generate_ppt", node_generate_ppt)
     builder.add_node("format_output", node_format_output)
 
     # 设置入口

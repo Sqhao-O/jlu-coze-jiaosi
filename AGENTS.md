@@ -25,7 +25,10 @@
     │       ├── __init__.py
     │       ├── graph.py         # 图编译入口
     │       ├── state.py         # 简化 State 定义
-    │       └── lesson_prep.py   # 3 节点流水线（router → generate → format）
+    │       └── lesson_prep.py   # 多节点流水线（router → 功能节点 → format）
+    ├── src/utils/
+    │   ├── json_parser.py     # LLM 输出 JSON 解析
+    │   └── ppt_client.py      # Coze Doc Maker 工作流调用客户端
     ├── assets/index.html     # 前端单页（教师面板 + 任务选择 + 流式渲染）
     ├── scripts/
     │   ├── setup.sh          # 依赖安装
@@ -59,6 +62,7 @@ intent_router → [chat] → chat_reply → format_output
              → [blind_spot] → detect_blindspots → format_output
              → [student_sim] → simulate_student_profiles → format_output
              → [interaction_design] → design_interactions → format_output
+             → [ppt_gen] → generate_ppt → format_output
 ```
 - **intent_router**: 根据 `mode` 字段路由到对应功能节点，`mode` 由前端显式传入
 - **各功能节点**: 独立 prompt + 单次 LLM 调用，各节点互不依赖（为后续 subagent 并行扩展预留）
@@ -73,6 +77,7 @@ intent_router → [chat] → chat_reply → format_output
 | `blind_spot` | detect_blindspots | 发现教案中的逻辑漏洞与认知跳步 |
 | `student_sim` | simulate_student_profiles | 模拟优/中/困三层学生思维路径 |
 | `interaction_design` | design_interactions | 设计师生互动方案和话术 |
+| `ppt_gen` | generate_ppt | 调用 Coze Doc Maker 生成教学课件 PPT |
 | `chat` | chat_reply | 自由对话 |
 
 ### 流式输出架构
@@ -84,7 +89,7 @@ intent_router → [chat] → chat_reply → format_output
 ### 前端参数化输入
 - 左侧面板：7 个核心参数（学科、年级、教学目标、重点、难点、课时时长、教学风格）
 - 每个参数支持「下拉选择 + 自定义输入」两种模式，点击切换按钮即可切换
-- 顶部功能选择器：6 种功能模式一键切换（教案生成/课堂预演/盲区检测/学情推演/互动设计/自由对话）
+- 顶部功能选择器：7 种功能模式一键切换（教案生成/课堂预演/盲区检测/学情推演/互动设计/PPT生成/自由对话）
 - 功能模式通过 `extra_body.mode` 显式传入后端，后端根据 mode 路由
 - 各功能模式下输入框变为"课题"输入，无需手写提示词
 
