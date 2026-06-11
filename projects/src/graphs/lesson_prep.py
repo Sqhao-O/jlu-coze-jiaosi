@@ -978,9 +978,161 @@ def node_format_output(state: LessonPrepState) -> dict:
     }
 
 
+def node_intent_router(state: LessonPrepState) -> dict:
+    """
+    节点0: 意图路由
+    快速判断用户意图是闲聊还是备课请求，避免闲聊走完整11节点流水线。
+    使用关键词匹配，零 LLM 调用，不产生流式输出泄漏。
+    """
+    ctx = request_context.get() or new_context(method="lesson_prep.intent")
+    logger.info(f"[备课-节点0] 意图路由开始")
+
+    user_input = ""
+    messages_list = state.get("messages", [])
+    if messages_list:
+        last_msg = messages_list[-1]
+        raw_content = ""
+        if hasattr(last_msg, "content"):
+            raw_content = last_msg.content
+        elif isinstance(last_msg, dict):
+            raw_content = last_msg.get("content", "")
+
+        # 处理 content 可能是 list 的情况 (如 [{"type":"text","text":"..."}])
+        if isinstance(raw_content, list):
+            parts = []
+            for item in raw_content:
+                if isinstance(item, dict):
+                    parts.append(item.get("text", ""))
+                elif isinstance(item, str):
+                    parts.append(item)
+            user_input = " ".join(parts)
+        elif isinstance(raw_content, str):
+            user_input = raw_content
+        else:
+            user_input = str(raw_content)
+
+    # 关键词匹配：判断是否为备课请求
+    lesson_keywords = [
+        # 直接备课动词
+        "备课", "教案", "教学设计", "课件", "板书", "教学目标", "重难点",
+        "课时", "课型", "新授课", "复习课", "习题课", "实验课", "综合课",
+        "帮我设计", "帮我写", "帮我准备", "帮我做", "帮我生成",
+        "设计一节", "设计一个", "写一份", "写一个", "准备一节", "准备一个",
+        "生成一份", "生成一个", "制作一份",
+        # 学科
+        "语文", "数学", "英语", "物理", "化学", "生物", "历史", "地理", "政治",
+        "科学", "道德与法治", "信息技术", "体育", "音乐", "美术",
+        # 学段
+        "小学", "初中", "高中", "一年级", "二年级", "三年级", "四年级", "五年级",
+        "六年级", "初一", "初二", "初三", "高一", "高二", "高三",
+        # 教学相关
+        "课堂", "教学", "上课", "讲授", "知识点", "单元", "章节", "课文",
+        "练习", "作业", "考试", "复习", "预习", "导学案",
+    ]
+    user_lower = user_input.lower()
+
+    intent = "chat"
+    for kw in lesson_keywords:
+        if kw in user_lower:
+            intent = "lesson_prep"
+            break
+
+    logger.info(f"[备课-节点0] 意图路由结果: {intent} (keyword match)")
+
+    return {
+        "intent": intent,
+        "last_action": f"意图路由: {'备课请求' if intent == 'lesson_prep' else '闲聊对话'}",
+        "intermediate_data": {
+            "intent_router": {"intent": intent, "method": "keyword_match"}
+        },
+    }
+
+
+def node_chat_reply(state: LessonPrepState) -> dict:
+    """
+    闲聊回复节点: 对非备课请求生成简短友好的回复。
+    直接连接到 format_output。
+    """
+    ctx = request_context.get() or new_context(method="lesson_prep.chat")
+    logger.info(f"[备课-闲聊] 生成闲聊回复")
+
+    from coze_coding_dev_sdk import LLMClient
+    client = LLMClient(ctx=ctx)
+
+    user_input = ""
+    messages_list = state.get("messages", [])
+    if messages_list:
+        last_msg = messages_list[-1]
+        raw_content = ""
+        if hasattr(last_msg, "content"):
+            raw_content = last_msg.content
+        elif isinstance(last_msg, dict):
+            raw_content = last_msg.get("content", "")
+
+        # 处理 content 可能是 list 的情况
+        if isinstance(raw_content, list):
+            parts = []
+            for item in raw_content:
+                if isinstance(item, dict):
+                    parts.append(item.get("text", ""))
+                elif isinstance(item, str):
+                    parts.append(item)
+            user_input = " ".join(parts)
+        elif isinstance(raw_content, str):
+            user_input = raw_content
+        else:
+            user_input = str(raw_content)
+
+    system_prompt = """你是「教思」AI教学孪生系统的智能助手。请用友好、专业、简洁的语气回复用户。
+
+## 你的身份
+- 你是一个专注于 K-12 教育的 AI 教学助手
+- 你可以帮助教师完成：智能备课、教学推演、成长分析、课堂辅助
+- 如果用户问你能做什么，简要介绍上述功能
+- 如果用户只是打招呼，友好回应并引导他们说出教学需求
+
+## 约束
+- 回复控制在 150 字以内
+- 不要编造不存在的功能
+- 语气温暖专业"""
+
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_input[:1000])
+    ]
+
+    response = client.invoke(
+        messages=messages,
+        model=get_llm_params("parse_requirements")["model"],
+        temperature=0.7,
+        max_completion_tokens=300,
+        thinking="disabled",
+    )
+
+    reply = extract_text_from_response(response)
+
+    return {
+        "final_lesson_plan": reply,
+        "lesson_plan_draft": reply,
+        "last_action": "闲聊回复完成",
+        "workflow_mode": WorkflowMode.NONE,
+        "intermediate_data": {
+            "chat_reply": {"reply": reply}
+        },
+    }
+
+
 # ============================================================
 # 路由函数
 # ============================================================
+
+def route_after_intent(state: LessonPrepState) -> Literal["parse_requirements", "chat_reply"]:
+    """意图路由后的分发: 备课→parse_requirements, 闲聊→chat_reply"""
+    intent = state.get("intent", "chat")
+    if intent == "lesson_prep":
+        return "parse_requirements"
+    return "chat_reply"
+
 
 def route_after_quality(state: LessonPrepState) -> Literal["format_output", "objectives_generation"]:
     """质量校验后的路由: 通过→格式化输出, 未通过且未超限→返回目标生成重试"""
@@ -998,11 +1150,13 @@ def route_after_quality(state: LessonPrepState) -> Literal["format_output", "obj
 # ============================================================
 
 def build_lesson_prep_graph() -> StateGraph:
-    """构建智能备课11节点StateGraph"""
+    """构建智能备课13节点StateGraph（含意图路由）"""
 
     builder = StateGraph(LessonPrepState)
 
     # 添加节点
+    builder.add_node("intent_router", node_intent_router)
+    builder.add_node("chat_reply", node_chat_reply)
     builder.add_node("parse_requirements", node_parse_requirements)
     builder.add_node("kb_retrieval", node_kb_retrieval)
     builder.add_node("style_modeling", node_style_modeling)
@@ -1015,10 +1169,23 @@ def build_lesson_prep_graph() -> StateGraph:
     builder.add_node("quality_check", node_quality_check)
     builder.add_node("format_output", node_format_output)
 
-    # 设置入口
-    builder.set_entry_point("parse_requirements")
+    # 设置入口: 意图路由
+    builder.set_entry_point("intent_router")
 
-    # 连线
+    # 意图路由分发
+    builder.add_conditional_edges(
+        "intent_router",
+        route_after_intent,
+        {
+            "parse_requirements": "parse_requirements",
+            "chat_reply": "chat_reply",
+        }
+    )
+
+    # 闲聊路径: chat_reply → format_output → END
+    builder.add_edge("chat_reply", "format_output")
+
+    # 备课路径连线
     builder.add_edge("parse_requirements", "kb_retrieval")
     builder.add_edge("kb_retrieval", "style_modeling")
     builder.add_edge("style_modeling", "objectives_generation")

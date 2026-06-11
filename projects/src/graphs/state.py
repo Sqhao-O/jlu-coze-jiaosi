@@ -125,13 +125,16 @@ class UserProfile(TypedDict, total=False):
 
 class LessonPrepState(TeachingState, total=False):
     """
-    智能备课工作流 State — 11节点
+    智能备课工作流 State — 13节点 (含意图路由)
 
     状态隔离规则:
     - 输入字段保留在顶层 (lesson_subject, lesson_topic, ...)
     - 节点 1-10 中间结果写入 intermediate_data["<node_name>"]
     - 仅 final_lesson_plan 为顶层输出
     """
+    # 意图路由
+    intent: str                      # 用户意图: "chat"(闲聊) / "lesson_prep"(备课请求)
+
     # 输入字段（用户提供）
     lesson_subject: str              # 备课学科
     lesson_topic: str                # 备课课题

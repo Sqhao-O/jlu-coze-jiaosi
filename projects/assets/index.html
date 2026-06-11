@@ -734,6 +734,7 @@ let vizData = { plans: 0, simulations: 0, score: null, days: 0 };
 
 // ==================== Node Definitions ====================
 const WORKFLOW_NODES = [
+    { id: 'intent', label: '意图识别', icon: '🧠' },
     { id: 'parse', label: '需求解析', icon: '🔍' },
     { id: 'kb', label: '知识检索', icon: '📖' },
     { id: 'style', label: '风格建模', icon: '🎨' },
@@ -1239,6 +1240,8 @@ async function sendStreamRequest(content) {
     const streamBubble = createStreamMessageElement();
     updateNodeProgress(WORKFLOW_NODES[0].id, 'running');
     let nodeIdx = 0;
+    let fullText = '';
+    let lastChunkTime = Date.now();
 
     try {
         const response = await fetch('/v1/chat/completions', {
@@ -1247,7 +1250,7 @@ async function sendStreamRequest(content) {
             body: JSON.stringify({
                 model: 'vibe-coding',
                 messages: [{ role: 'user', content }],
-                stream: false,
+                stream: true,
                 session_id: sessionId
             })
         });
@@ -1257,36 +1260,62 @@ async function sendStreamRequest(content) {
             throw new Error(err.error?.message || 'HTTP ' + response.status);
         }
 
-        const data = await response.json();
-        var fullText = data.choices?.[0]?.message?.content || '（未获取到回复）';
+        // SSE streaming: read response body line by line
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-        // Typewriter animation
-        const totalLen = fullText.length;
-        let displayed = 0;
-        const CHUNK = 8;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-        await new Promise(resolve => {
-            const tick = () => {
-                displayed = Math.min(displayed + CHUNK, totalLen);
-                const partialText = fullText.slice(0, displayed);
-                const progress = displayed / totalLen;
-                const targetIdx = Math.min(Math.floor(progress * WORKFLOW_NODES.length), WORKFLOW_NODES.length - 1);
-                while (nodeIdx <= targetIdx) {
-                    updateNodeProgress(WORKFLOW_NODES[nodeIdx].id, 'completed');
-                    nodeIdx++;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            // Keep the last incomplete line in buffer
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+                const dataStr = trimmed.slice(5).trim();
+                if (dataStr === '[DONE]') continue;
+
+                try {
+                    const chunk = JSON.parse(dataStr);
+                    const delta = chunk.choices?.[0]?.delta;
+                    if (!delta) continue;
+
+                    // Extract content from delta
+                    const text = delta.content || '';
+                    if (text) {
+                        fullText += text;
+                        lastChunkTime = Date.now();
+                        streamBubble.innerHTML = renderMarkdown(fullText);
+
+                        // Update node progress based on received content length
+                        const progress = Math.min(fullText.length / 2000, 1);
+                        const targetIdx = Math.min(Math.floor(progress * WORKFLOW_NODES.length), WORKFLOW_NODES.length - 1);
+                        while (nodeIdx <= targetIdx) {
+                            updateNodeProgress(WORKFLOW_NODES[nodeIdx].id, 'completed');
+                            nodeIdx++;
+                        }
+                    }
+                } catch (e) {
+                    // Skip unparseable chunks
                 }
-                streamBubble.innerHTML = renderMarkdown(partialText);
-                if (displayed < totalLen) {
-                    requestAnimationFrame(tick);
-                } else {
-                    for (let i = nodeIdx; i < WORKFLOW_NODES.length; i++) updateNodeProgress(WORKFLOW_NODES[i].id, 'completed');
-                    // Detect and render visualizations from the full response
-                    detectAndRenderVisualizations(fullText);
-                    resolve();
-                }
-            };
-            requestAnimationFrame(tick);
-        });
+            }
+        }
+
+        // Mark all remaining nodes as completed
+        for (let i = nodeIdx; i < WORKFLOW_NODES.length; i++) {
+            updateNodeProgress(WORKFLOW_NODES[i].id, 'completed');
+        }
+
+        // Detect and render visualizations from the full response
+        if (fullText) {
+            detectAndRenderVisualizations(fullText);
+        }
 
     } catch (err) {
         console.error('Request error:', err);
@@ -1294,7 +1323,7 @@ async function sendStreamRequest(content) {
     }
 
     scrollToBottom();
-    if (typeof fullText !== 'undefined' && fullText) {
+    if (fullText) {
         messageHistory.push({ role: 'assistant', content: fullText });
         currentSession.messages.push({ role: 'assistant', content: fullText });
         addCopyButtons(streamBubble);

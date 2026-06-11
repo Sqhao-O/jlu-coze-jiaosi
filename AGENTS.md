@@ -50,3 +50,5 @@
 4. **数据库降级**：`db.py` 中 `get_db_url()` 在 `get_project_env_vars()` 失败时不再抛异常，而是返回空字符串，由 `_create_engine_with_retry()` 根据 `DEV_MODE` 环境变量决定是否降级为 SQLite
 5. **cozeloop 兼容性**：LangChain 1.0 移除了 `langchain.callbacks` 模块，需要 `cozeloop >= 0.1.28` 才能兼容
 6. **http_run.sh 幂等性**：脚本启动前会 `fuser -k` 清理端口残留进程，确保重复执行不会冲突
+7. **意图路由**：`lesson_prep` 图在入口处有 `node_intent_router` 节点，将用户输入分类为 `"chat"`（闲聊）或 `"lesson_prep"`（备课）。闲聊走 3 节点快速通道（router → chat_reply → format_output），备课走完整 11 节点流水线
+8. **前端 SSE 流式**：`assets/index.html` 使用 `stream: true` + SSE 解析，实时展示每个节点的输出。`WORKFLOW_NODES` 常量包含 `intent_router` 节点用于进度条更新
