@@ -1,14 +1,9 @@
 """
-「教思」AI教学孪生系统 - 全局状态定义
-TeachingThought Global State Definitions
+教思 AI 教学孪生系统 — 简化状态定义
 
-定义所有工作流和Agent共享的状态结构:
-- 10个会话变量 (Conversation Variables) → LangGraph State字段
-- 8个用户变量 (User Variables) → PostgreSQL持久化字段
-
-重构 v2.0: 状态隔离架构
-- messages: 仅保留用户输入和最终回复（禁止写入中间结果）
-- intermediate_data: 节点1-10的中间 JSON 结果统一写入此处
+重构 v3.0: 3 节点流水线
+- 去掉 intermediate_data 和所有中间节点字段
+- 只保留意图路由、核心生成、格式化输出所需的最小字段集
 """
 
 from typing import Annotated, TypedDict, Optional, Dict, Any, List
@@ -16,263 +11,33 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
 
 
-# ============================================================
-# 会话变量 - LangGraph State (10个字段)
-# 这些变量在单次会话中流转，会话结束后可选择性持久化
-# ============================================================
-
-class TeachingStyle(TypedDict, total=False):
-    """7维教学风格向量"""
-    compactness: float      # 紧凑度 (0-1): 内容密度和节奏
-    interactivity: float    # 互动度 (0-1): 师生互动的偏好程度
-    depth: float            # 深度 (0-1): 对概念深入挖掘的偏好
-    interest: float         # 趣味性 (0-1): 使用趣味元素的倾向
-    rigor: float            # 严谨度 (0-1): 学术规范和准确性要求
-    innovation: float      # 创新度 (0-1): 尝试新方法的意愿
-    warmth: float           # 温度 (0-1): 情感关怀和鼓励的偏好
-
-
-class KnowledgeBaseResults(TypedDict, total=False):
-    """知识库检索结果缓存"""
-    standards: str       # KB1: 课程标准检索结果
-    textbooks: str       # KB2: 教材教参检索结果
-    pedagogy: str        # KB3: 教学法检索结果
-    personal: str        # KB4: 个人知识库检索结果
-
-
-class SimulationResult(TypedDict, total=False):
-    """教学推演结果摘要"""
-    risk_level: str              # 总体风险等级: "red"/"yellow"/"green"
-    bottleneck_count: int        # 瓶颈数量
-    bottleneck_summary: str      # 瓶颈摘要
-    student_a_feedback: str      # 基础生关键反馈
-    student_b_feedback: str      # 中等生关键反馈
-    student_c_feedback: str      # 优等生关键反馈
-    optimized_plan_snippet: str  # 优化片段
-
-
-class TeachingState(TypedDict, total=False):
+class LessonPrepState(TypedDict, total=False):
     """
-    教思系统全局状态 — 会话级变量
-
-    状态隔离原则:
-    - intermediate_data: 所有节点(1-10/N-1)的中间计算结果写入此处
-    - messages: 仅保留用户输入和最终回复（使用 add_messages reducer）
-    - 顶层字段: 仅保留工作流控制字段和最终输出字段
-
-    这些变量在整个会话生命周期中流转，通过LangGraph的State机制
-    在各节点之间自动传递和合并。
+    智能备课工作流 State — 3 节点 (intent_router → generate_lesson_plan → format_output)
     """
-    # --- 对话消息（仅用户输入 + 最终回复） ---
+    # --- 对话消息 ---
     messages: Annotated[list[AnyMessage], add_messages]
 
-    # --- 中间数据隔离区 ---
-    # 所有节点(1-10/N-1)的中间 JSON 结果必须写入此处
-    # 禁止将中间结果写入 messages 或顶层字段
-    # 使用方式: state["intermediate_data"]["<node_name>"] = result
-    intermediate_data: Dict[str, Any]
+    # --- 意图路由 ---
+    intent: str  # "chat" / "lesson_prep"
 
-    # --- 基础信息 ---
-    subject: str                     # 当前科目: "语文"/"数学"/"英语"/.../"未指定"
-    grade: str                       # 学段: "小学"/"初中"/"高中"
-    grade_level: str                 # 具体年级: "一年级"~"高三"
+    # --- 教师输入参数（前端表单直接传入） ---
+    lesson_subject: str       # 学科: "语文"/"数学"/"英语"/...
+    lesson_topic: str         # 课题名称
+    lesson_grade: str         # 年级: "初一"/"初二"/...
+    lesson_hours: int         # 课时数（默认1）
+    lesson_type: str          # 课型: "新授课"/"复习课"/"习题课"/"实验课"/"综合课"
+    style_preference: str     # 教学风格: "启发式互动型"/"系统讲授型"/"情感体验型"/"任务驱动型"/"混合型"
+    teacher_name: str         # 教师姓名（可选）
+    years_of_experience: int  # 教龄（可选，默认5）
+    key_concerns: str         # 教师特别关注点（可选）
 
-    # --- 教学风格 ---
-    teaching_style: TeachingStyle    # 7维风格向量
-    style_description: str           # 风格的自然语言描述
+    # --- 输出 ---
+    _lesson_plan_json: str      # 中间：generate_lesson_plan 的 JSON 输出（内部使用）
+    final_lesson_plan: str      # 最终格式化教案（Markdown）
 
-    # --- 当前任务上下文 ---
-    current_lesson_topic: str        # 当前课题名称
-    lesson_plan_draft: str           # 教案全文 (>2000字自动压缩为500字摘要)
-    simulation_result: SimulationResult  # 最近一次推演结果摘要
-    last_action: str                 # 最近操作描述 (用于上下文连贯)
-
-    # --- 工作流控制 ---
-    workflow_mode: str               # 当前激活的工作流: "lesson_prep"/"simulation"/"growth"/"classroom"/None
-    error_count: int                 # 当前工作流重试计数
-    max_retries: int                 # 最大重试次数 (默认3)
-
-    # --- 知识库缓存 (迁入 intermediate_data，保留类型定义) ---
-    kb_results: KnowledgeBaseResults # RAG检索结果缓存
-
-
-# ============================================================
-# 用户变量 - PostgreSQL持久化 (8个字段)
-# 这些变量跨会话持久化，存储在数据库中
-# ============================================================
-
-class UserProfile(TypedDict, total=False):
-    """
-    用户档案 — 持久化到PostgreSQL user_profile表
-
-    这些数据跨会话保持，用于个性化教师体验。
-    """
-    teacher_name: str                # 教师姓名
-    subjects_taught: list[str]       # 任教科目列表
-    grade_taught: str                # 任教年级
-    years_of_experience: int         # 教龄
-    preferred_model: str             # 偏好模型: "pro"(精准)/"lite"(快速)
-
-    # 以下字段通过S3+DB索引存储:
-    # historical_lesson_plans: list[str]  # 历史教案S3 key列表
-    # teaching_journal: list[dict]        # 教学反思日志
-    # growth_history: list[dict]          # 五维成长历史快照
-
-
-# ============================================================
-# 工作流专用State (继承自TeachingState)
-# ============================================================
-
-class LessonPrepState(TeachingState, total=False):
-    """
-    智能备课工作流 State — 13节点 (含意图路由)
-
-    状态隔离规则:
-    - 输入字段保留在顶层 (lesson_subject, lesson_topic, ...)
-    - 节点 1-10 中间结果写入 intermediate_data["<node_name>"]
-    - 仅 final_lesson_plan 为顶层输出
-    """
-    # 意图路由
-    intent: str                      # 用户意图: "chat"(闲聊) / "lesson_prep"(备课请求)
-
-    # 输入字段（用户提供）
-    lesson_subject: str              # 备课学科
-    lesson_topic: str                # 备课课题
-    lesson_grade: str                # 备课年级
-    lesson_hours: int                # 课时数
-    lesson_type: str                 # 课型: "新授课"/"复习课"/"习题课"/"实验课"/"综合课"
-    style_preference: str            # 风格偏好标签
-
-    # 输出字段（仅最终结果）
-    final_lesson_plan: str           # 最终格式化教案
-
-    # 注意：以下字段已废弃，请使用 intermediate_data
-    # - kb_context → intermediate_data["kb_retrieval"]["kb_context"]
-    # - style_profile → intermediate_data["style_modeling"]["style_profile"]
-    # - teaching_objectives → intermediate_data["objectives_generation"]
-    # - key_difficult_points → intermediate_data["key_difficulty_design"]
-    # - teaching_process → intermediate_data["process_design"]["teaching_process"]
-    # - board_design → intermediate_data["board_design"]
-    # - tiered_exercises → intermediate_data["tiered_exercises"]
-    # - homework_design → intermediate_data["homework_design"]
-    # - validation_errors → intermediate_data["quality_check"]
-
-
-class SimulationState(TeachingState, total=False):
-    """
-    教学推演工作流 State — 12节点 + 3路并行
-
-    状态隔离规则:
-    - 输入字段保留在顶层
-    - 节点中间结果写入 intermediate_data
-    - 仅 final_simulation_report 为顶层输出
-    """
-    # 输入
-    source_lesson_plan: str          # 待推演的完整教案文本
-    class_profile: dict              # 班级画像
-    focus_stage: str                 # 聚焦环节
-    virtual_students: dict           # 虚拟学生角色卡
-
-    # 3路并行模拟结果 (由Send扇出节点产生)
-    student_simulations: list[dict]  # 三路学生模拟结果聚合
-
-    # 输出
-    final_simulation_report: str     # 最终推演报告
-
-
-class GrowthAnalysisState(TeachingState, total=False):
-    """
-    成长分析工作流 State — 14节点
-
-    状态隔离规则:
-    - 输入字段保留在顶层
-    - 节点中间结果写入 intermediate_data
-    - 仅 final_growth_report 为顶层输出
-    """
-    # 输入
-    analysis_period: str             # 分析周期
-    analysis_type: str               # 报告类型
-
-    # 输出
-    final_growth_report: str         # 最终成长报告
-
-
-# ============================================================
-# 中间数据键名常量 — 用于 intermediate_data 的标准化访问
-# ============================================================
-
-class IntermediateKey:
-    """intermediate_data 字典的标准化键名"""
-    # 备课工作流
-    LESSON_PARSE_REQUIREMENTS = "parse_requirements"
-    LESSON_KB_RETRIEVAL = "kb_retrieval"
-    LESSON_STYLE_MODELING = "style_modeling"
-    LESSON_OBJECTIVES = "objectives_generation"
-    LESSON_KEY_DIFFICULTY = "key_difficulty_design"
-    LESSON_PROCESS_DESIGN = "process_design"
-    LESSON_BOARD_DESIGN = "board_design"
-    LESSON_TIERED_EXERCISES = "tiered_exercises"
-    LESSON_HOMEWORK_DESIGN = "homework_design"
-    LESSON_QUALITY_CHECK = "quality_check"
-
-    # 推演工作流
-    SIM_PARSE_PLAN = "parse_lesson_plan"
-    SIM_VIRTUAL_CLASSROOM = "build_virtual_classroom"
-    SIM_STUDENT_A = "student_a_simulation"
-    SIM_STUDENT_B = "student_b_simulation"
-    SIM_STUDENT_C = "student_c_simulation"
-    SIM_AGGREGATE = "aggregate_results"
-    SIM_BOTTLENECK = "bottleneck_detection"
-    SIM_RISK = "risk_assessment"
-    SIM_CONTINGENCY = "contingency_plans"
-    SIM_OPTIMIZATION = "optimization_suggestions"
-    SIM_COMPARISON = "comparison_report"
-
-    # 成长分析工作流
-    GROWTH_COLLECT = "data_collection"
-    GROWTH_CLEAN = "data_cleaning"
-    GROWTH_DIM_DESIGN = "dimension_design"
-    GROWTH_DIM_CLASSROOM = "dimension_classroom"
-    GROWTH_DIM_DIAGNOSIS = "dimension_diagnosis"
-    GROWTH_DIM_FEEDBACK = "dimension_feedback"
-    GROWTH_DIM_REFLECTION = "dimension_reflection"
-    GROWTH_RADAR = "radar_aggregation"
-    GROWTH_TREND = "trend_analysis"
-    GROWTH_ATTRIBUTION = "attribution_analysis"
-    GROWTH_ACHIEVEMENT = "achievement_discovery"
-    GROWTH_SUGGESTIONS = "suggestions_generation"
-    GROWTH_NARRATIVE = "personalized_narrative"
-
-
-# ============================================================
-# 工作流枚举常量
-# ============================================================
 
 class WorkflowMode:
     """工作流模式枚举"""
-    LESSON_PREP = "lesson_prep"           # 智能备课
-    TEACHING_SIMULATION = "simulation"     # 教学推演
-    GROWTH_ANALYSIS = "growth"             # 成长分析
-    CLASSROOM = "classroom"                # 课堂辅助
-    NONE = "none"                          # 无活跃工作流
-
-
-class RiskLevel:
-    """风险等级"""
-    RED = "red"        # 高风险: ≥2个学生有明显困惑
-    YELLOW = "yellow"  # 中风险: 仅基础层学生有困惑
-    GREEN = "green"    # 低风险: 仅个别学生有轻微困惑
-
-
-class ErrorTier:
-    """错因层级"""
-    L1_KNOWLEDGE = "L1"    # L1 知识性错误: 不知道知识点
-    L2_METHOD = "L2"       # L2 方法性错误: 知道但用错方法
-    L3_HABIT = "L3"        # L3 习惯性错误: 粗心/审题等习惯问题
-
-
-class StudentTier:
-    """学生认知层次"""
-    BASIC = "基础层"       # 后30%: 需要具体例子和直观演示
-    INTERMEDIATE = "进阶层" # 中间50%: 能跟上但缺乏深度思考
-    ADVANCED = "挑战层"     # 前20%: 理解力强,需要额外挑战
+    LESSON_PREP = "lesson_prep"
+    NONE = "none"
