@@ -51,4 +51,6 @@
 5. **cozeloop 兼容性**：LangChain 1.0 移除了 `langchain.callbacks` 模块，需要 `cozeloop >= 0.1.28` 才能兼容
 6. **http_run.sh 幂等性**：脚本启动前会 `fuser -k` 清理端口残留进程，确保重复执行不会冲突
 7. **意图路由**：`lesson_prep` 图在入口处有 `node_intent_router` 节点，将用户输入分类为 `"chat"`（闲聊）或 `"lesson_prep"`（备课）。闲聊走 3 节点快速通道（router → chat_reply → format_output），备课走完整 11 节点流水线
-8. **前端 SSE 流式**：`assets/index.html` 使用 `stream: true` + SSE 解析，实时展示每个节点的输出。`WORKFLOW_NODES` 常量包含 `intent_router` 节点用于进度条更新
+8. **前端 SSE 流式**：`assets/index.html` 使用 `stream: true` + SSE 解析，后端通过自定义 `node_progress` SSE 事件推送节点进度，前端实时更新进度条。流式文本只放行 `chat_reply`（闲聊）和 `format_output`（备课最终输出）节点的 Markdown 内容，中间节点的 LLM 输出被过滤，不会泄漏到前端
+9. **流式过滤架构**：`main.py` 中的 `_filtered_stream_generator` 使用 `stream_mode=["messages", "updates"]` 双模式消费 LangGraph 流。`messages` 模式用于放行 `chat_reply` 的 LLM token 流；`updates` 模式用于推送节点完成进度和 `format_output` 的完整教案文本。`text_sent_via_messages` 标记防止闲聊场景下 `chat_reply` 的文本和 `format_output` 的文本重复推送
+10. **闲聊场景 format_output**：`node_format_output` 在 `intent != "lesson_prep"` 时直接透传 `chat_reply` 的消息，不生成空教案模板

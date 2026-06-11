@@ -1119,6 +1119,7 @@ function tryParseJson(text) {
 // ==================== Markdown Rendering ====================
 function renderMarkdown(text) {
     if (!text) return '';
+    // Try JSON → Markdown conversion as fallback (for non-stream or edge cases)
     const jsonObj = tryParseJson(text);
     if (jsonObj !== null) {
         const formatted = formatJsonToMarkdown(jsonObj);
@@ -1129,6 +1130,8 @@ function renderMarkdown(text) {
             return temp.innerHTML;
         } catch(e) { return escapeHtml(formatted); }
     }
+    // Primary path: render text as Markdown directly
+    // (backend ensures stream output is already formatted Markdown)
     try {
         const html = marked.parse(text, { breaks: true, gfm: true });
         const temp = document.createElement('div'); temp.innerHTML = html;
@@ -1238,10 +1241,11 @@ window.sendMessage = async function() {
 
 async function sendStreamRequest(content) {
     const streamBubble = createStreamMessageElement();
-    updateNodeProgress(WORKFLOW_NODES[0].id, 'running');
-    let nodeIdx = 0;
     let fullText = '';
     let lastChunkTime = Date.now();
+
+    // Track which progress nodes are active (for running state)
+    let lastCompletedIdx = -1;
 
     try {
         const response = await fetch('/v1/chat/completions', {
@@ -1274,41 +1278,69 @@ async function sendStreamRequest(content) {
             // Keep the last incomplete line in buffer
             buffer = lines.pop() || '';
 
+            let currentEventType = '';
             for (const line of lines) {
                 const trimmed = line.trim();
+
+                // Parse SSE event type
+                if (trimmed.startsWith('event:')) {
+                    currentEventType = trimmed.slice(6).trim();
+                    continue;
+                }
+
                 if (!trimmed || !trimmed.startsWith('data:')) continue;
 
                 const dataStr = trimmed.slice(5).trim();
                 if (dataStr === '[DONE]') continue;
 
                 try {
-                    const chunk = JSON.parse(dataStr);
-                    const delta = chunk.choices?.[0]?.delta;
-                    if (!delta) continue;
+                    const data = JSON.parse(dataStr);
+
+                    // Handle custom node_progress events
+                    if (currentEventType === 'node_progress') {
+                        const progressId = data.progress_id;
+                        const status = data.status;
+                        if (status === 'completed' && progressId) {
+                            // Mark this node as completed and previous ones too
+                            const nodeIdx = WORKFLOW_NODES.findIndex(n => n.id === progressId);
+                            if (nodeIdx !== -1) {
+                                // Mark all nodes up to this one as completed
+                                for (let i = 0; i <= nodeIdx; i++) {
+                                    updateNodeProgress(WORKFLOW_NODES[i].id, 'completed');
+                                }
+                                // Mark the next node as running (if exists)
+                                if (nodeIdx + 1 < WORKFLOW_NODES.length) {
+                                    updateNodeProgress(WORKFLOW_NODES[nodeIdx + 1].id, 'running');
+                                }
+                                lastCompletedIdx = nodeIdx;
+                            }
+                        }
+                        currentEventType = '';
+                        continue;
+                    }
+
+                    // Handle standard OpenAI chunks
+                    const delta = data.choices?.[0]?.delta;
+                    if (!delta) { currentEventType = ''; continue; }
 
                     // Extract content from delta
                     const text = delta.content || '';
                     if (text) {
                         fullText += text;
                         lastChunkTime = Date.now();
+                        // Directly render as Markdown (backend ensures output is clean Markdown)
                         streamBubble.innerHTML = renderMarkdown(fullText);
-
-                        // Update node progress based on received content length
-                        const progress = Math.min(fullText.length / 2000, 1);
-                        const targetIdx = Math.min(Math.floor(progress * WORKFLOW_NODES.length), WORKFLOW_NODES.length - 1);
-                        while (nodeIdx <= targetIdx) {
-                            updateNodeProgress(WORKFLOW_NODES[nodeIdx].id, 'completed');
-                            nodeIdx++;
-                        }
                     }
                 } catch (e) {
                     // Skip unparseable chunks
                 }
+
+                currentEventType = '';
             }
         }
 
         // Mark all remaining nodes as completed
-        for (let i = nodeIdx; i < WORKFLOW_NODES.length; i++) {
+        for (let i = 0; i < WORKFLOW_NODES.length; i++) {
             updateNodeProgress(WORKFLOW_NODES[i].id, 'completed');
         }
 

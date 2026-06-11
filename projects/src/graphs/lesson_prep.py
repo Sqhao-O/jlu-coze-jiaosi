@@ -784,10 +784,30 @@ def node_quality_check(state: LessonPrepState) -> dict:
 def node_format_output(state: LessonPrepState) -> dict:
     """
     节点11: 格式化输出
-    将各部分组装为完整的9段式教案文本
+    将各部分组装为完整的9段式教案文本。
+    闲聊场景下直接透传 chat_reply 的消息，不生成空教案模板。
     """
     ctx = request_context.get() or new_context(method="lesson_prep.format")
     logger.info(f"[备课-节点11] 格式化输出开始")
+
+    # 闲聊场景：直接透传消息，不生成教案模板
+    intent = state.get("intent", "")
+    if intent != "lesson_prep":
+        messages = state.get("messages", [])
+        last_ai_msg = ""
+        for msg in reversed(messages):
+            if hasattr(msg, 'type') and msg.type == 'ai':
+                last_ai_msg = msg.content
+                break
+            elif isinstance(msg, dict) and msg.get('role') == 'assistant':
+                last_ai_msg = msg.get('content', '')
+                break
+        return {
+            "final_lesson_plan": last_ai_msg,
+            "lesson_plan_draft": last_ai_msg,
+            "last_action": "闲聊回复完成",
+            "workflow_mode": WorkflowMode.NONE,
+        }
 
     subject = state.get("lesson_subject", state.get("subject", "未指定"))
     topic = state.get("lesson_topic", state.get("current_lesson_topic", ""))

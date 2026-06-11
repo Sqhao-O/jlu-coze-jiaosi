@@ -1,9 +1,11 @@
 import argparse
 import asyncio
+import contextvars
 import json
 import threading
 import traceback
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Iterable, AsyncIterable, AsyncGenerator, Optional
@@ -50,6 +52,7 @@ setup_logging(
 logger = logging.getLogger(__name__)
 from coze_coding_utils.helper.agent_helper import to_stream_input
 from coze_coding_utils.openai.handler import OpenAIChatHandler
+from coze_coding_utils.openai.converter.response_converter import ResponseConverter
 from coze_coding_utils.log.parser import LangGraphParser
 from coze_coding_utils.log.err_trace import extract_core_stack
 from coze_coding_utils.log.loop_trace import init_run_config, init_agent_config
@@ -1029,9 +1032,60 @@ async def http_node_run(node_id: str, request: Request):
         cozeloop.flush()
 
 
+# ============================================================
+# 节点进度映射：LangGraph 节点名 → 前端进度条 ID
+# ============================================================
+NODE_PROGRESS_MAP = {
+    "intent_router":      "intent",
+    "parse_requirements": "parse",
+    "kb_retrieval":       "kb",
+    "style_modeling":     "style",
+    "objectives_generation": "objectives",
+    "key_difficulty_design": "difficulty",
+    "process_design":     "process",
+    "board_design":       "process",   # 合并到"教学过程"阶段
+    "tiered_exercises":   "evaluate",
+    "homework_design":    "evaluate",
+    "quality_check":      "evaluate",
+    "format_output":      "evaluate",
+    "chat_reply":         "intent",
+}
+
+# 只放行这些节点的 LLM 文本输出到前端（它们的输出已经是格式化好的 Markdown）
+OUTPUT_NODES = {"format_output", "chat_reply"}
+
+
+def _build_sse_event(event_type: str, data: Any) -> str:
+    """构造自定义 SSE 事件（非 OpenAI 标准），用于节点进度通知"""
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _build_openai_chunk(request_id: str, model: str, created: int,
+                        delta_content: str = "", delta_role: str = "",
+                        finish_reason: str = None) -> str:
+    """构造 OpenAI 兼容的 SSE chunk"""
+    delta = {}
+    if delta_role:
+        delta["role"] = delta_role
+    if delta_content:
+        delta["content"] = delta_content
+    chunk = {
+        "id": request_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": model,
+        "choices": [{
+            "index": 0,
+            "delta": delta,
+            "finish_reason": finish_reason,
+        }],
+    }
+    return f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+
 @app.post("/v1/chat/completions")
 async def openai_chat_completions(request: Request):
-    """OpenAI Chat Completions API 兼容接口"""
+    """OpenAI Chat Completions API 兼容接口（自定义流式过滤）"""
     ctx = new_context(method="openai_chat", headers=request.headers)
     request_context.set(ctx)
 
@@ -1039,32 +1093,202 @@ async def openai_chat_completions(request: Request):
 
     try:
         payload = await request.json()
-        result = await openai_handler.handle(payload, ctx)
 
-        # Format JSON content in the response to readable Markdown
-        # result may be JSONResponse (has body) or dict
-        result_body = result
-        if hasattr(result, 'body'):
-            result_body = json.loads(result.body)
+        # 解析请求
+        req = openai_handler.request_converter.parse(payload)
+        session_id = openai_handler.request_converter.get_session_id(req)
+        if not session_id:
+            return JSONResponse(
+                content={"error": {"message": "session_id is required", "type": "invalid_request_error", "code": "400001"}},
+                status_code=400,
+            )
 
-        if isinstance(result_body, dict) and "choices" in result_body:
-            for choice in result_body.get("choices", []):
-                msg = choice.get("message", {})
-                content = msg.get("content", "")
-                if isinstance(content, str) and len(content) > 100:
-                    try:
-                        msg["content"] = format_teaching_content(content)
-                    except Exception as fmt_err:
-                        logger.warning(f"Content formatting failed: {fmt_err}")
+        stream_input = openai_handler.request_converter.to_stream_input(req)
+        if not stream_input.get("messages"):
+            return JSONResponse(
+                content={"error": {"message": "No user message found", "type": "invalid_request_error", "code": "400002"}},
+                status_code=400,
+            )
 
-            return JSONResponse(content=result_body)
+        if not req.stream:
+            # 非流式：使用 SDK handler，然后格式化输出
+            result = await openai_handler._handle_non_stream(
+                stream_input, session_id,
+                ResponseConverter(request_id=f"chatcmpl-{ctx.run_id}", model=req.model),
+                ctx,
+            )
+            result_body = result
+            if hasattr(result, 'body'):
+                result_body = json.loads(result.body)
 
-        return result
+            if isinstance(result_body, dict) and "choices" in result_body:
+                for choice in result_body.get("choices", []):
+                    msg = choice.get("message", {})
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and len(content) > 100:
+                        try:
+                            msg["content"] = format_teaching_content(content)
+                        except Exception as fmt_err:
+                            logger.warning(f"Content formatting failed: {fmt_err}")
+                return JSONResponse(content=result_body)
+            return result
+
+        # 流式：自定义流式处理，过滤中间节点输出
+        return StreamingResponse(
+            _filtered_stream_generator(stream_input, session_id, req.model, ctx),
+            media_type="text/event-stream",
+        )
+
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error in openai_chat_completions: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     finally:
         cozeloop.flush()
+
+
+async def _filtered_stream_generator(
+    stream_input: Dict[str, Any],
+    session_id: str,
+    model: str,
+    ctx,
+) -> AsyncGenerator[str, None]:
+    """
+    自定义流式生成器：过滤中间节点的 LLM 输出，只放行最终格式化节点。
+
+    - 使用 stream_mode=["messages", "updates"] 同时获取消息和节点进度
+    - 中间节点（parse_requirements, kb_retrieval, ...）的 AIMessageChunk 文本被过滤掉
+    - format_output / chat_reply 节点的文本正常推送给前端
+    - 每个节点完成时通过 "updates" 模式推送 node_progress 自定义 SSE 事件
+    """
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+    context_copy = contextvars.copy_context()
+    request_id = f"chatcmpl-{ctx.run_id}"
+    created = int(time.time())
+
+    def producer():
+        """后台线程：消费 LangGraph 原始流，过滤后放入队列"""
+        from utils.helper import graph_helper as _gh
+        graph = service._get_graph(ctx)
+
+        if _gh.is_agent_proj():
+            from utils.log.loop_trace import init_agent_config
+            run_config = init_agent_config(graph, ctx)
+        else:
+            from utils.log.loop_trace import init_run_config
+            run_config = init_run_config(graph, ctx)
+
+        run_config["recursion_limit"] = 100
+        run_config["configurable"] = {"thread_id": session_id}
+
+        sent_role = False
+        completed_nodes = set()
+        text_sent_via_messages = False  # 标记是否已通过 messages 模式发送过文本（避免 updates 重复推送）
+
+        try:
+            # 同时监听消息流和节点更新
+            items = graph.stream(
+                stream_input,
+                stream_mode=["messages", "updates"],
+                config=run_config,
+                context=ctx,
+            )
+
+            for mode, chunk_data in items:
+                # --- 处理 "updates" 模式：节点完成进度 + format_output 的教案输出 ---
+                if mode == "updates":
+                    # chunk_data 是 {node_name: output_dict} 格式
+                    if isinstance(chunk_data, dict):
+                        for node_name, node_output in chunk_data.items():
+                            # 1) 推送节点完成进度
+                            if node_name not in completed_nodes:
+                                completed_nodes.add(node_name)
+                                progress_id = NODE_PROGRESS_MAP.get(node_name, node_name)
+                                loop.call_soon_threadsafe(queue.put_nowait,
+                                    _build_sse_event("node_progress", {
+                                        "node": node_name,
+                                        "progress_id": progress_id,
+                                        "status": "completed",
+                                    })
+                                )
+
+                            # 2) format_output 节点：提取 final_lesson_plan 作为流式文本推送
+                            #    因为 format_output 不调用 LLM，所以 messages 模式不会产生 chunk，
+                            #    我们从 updates 中拿到完整的教案文本，一次性推送。
+                            #    但如果 chat_reply 已经通过 messages 模式推送过文本（闲聊场景），
+                            #    则不再重复推送。
+                            if node_name == "format_output" and isinstance(node_output, dict) and not text_sent_via_messages:
+                                lesson_plan = node_output.get("final_lesson_plan", "")
+                                if lesson_plan:
+                                    if not sent_role:
+                                        sent_role = True
+                                        loop.call_soon_threadsafe(queue.put_nowait,
+                                            _build_openai_chunk(request_id, model, created, delta_role="assistant")
+                                        )
+                                    loop.call_soon_threadsafe(queue.put_nowait,
+                                        _build_openai_chunk(request_id, model, created, delta_content=lesson_plan)
+                                    )
+                    continue
+
+                # --- 处理 "messages" 模式：LLM token 流 ---
+                if mode == "messages":
+                    chunk, meta = chunk_data
+                    chunk_type = chunk.__class__.__name__
+                    node_name = (meta or {}).get("langgraph_node", "")
+
+                    # 过滤中间节点的文本输出
+                    if chunk_type in ("AIMessageChunk", "AIMessage"):
+                        text = getattr(chunk, "content", "")
+                        if text and node_name not in OUTPUT_NODES:
+                            # 中间节点：不推送文本
+                            continue
+                        if text and node_name in OUTPUT_NODES:
+                            # 最终输出节点：推送文本
+                            text_sent_via_messages = True  # 标记已通过 messages 模式推送文本
+                            if not sent_role:
+                                sent_role = True
+                                loop.call_soon_threadsafe(queue.put_nowait,
+                                    _build_openai_chunk(request_id, model, created, delta_role="assistant")
+                                )
+                            loop.call_soon_threadsafe(queue.put_nowait,
+                                _build_openai_chunk(request_id, model, created, delta_content=text)
+                            )
+
+            # 流结束
+            if sent_role:
+                loop.call_soon_threadsafe(queue.put_nowait,
+                    _build_openai_chunk(request_id, model, created, finish_reason="stop")
+                )
+            loop.call_soon_threadsafe(queue.put_nowait, "data: [DONE]\n\n")
+
+        except Exception as ex:
+            logger.error(f"Stream producer error: {ex}", exc_info=True)
+            err = classify_error(ex, {"node_name": "openai_stream"})
+            error_data = {
+                "id": request_id,
+                "object": "chat.completion.chunk",
+                "error": {"message": str(ex), "type": "internal_error", "code": str(err.code)},
+            }
+            loop.call_soon_threadsafe(queue.put_nowait,
+                f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+            )
+            loop.call_soon_threadsafe(queue.put_nowait, "data: [DONE]\n\n")
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    # 启动后台线程
+    threading.Thread(target=lambda: context_copy.run(producer), daemon=True).start()
+
+    # 从队列消费
+    try:
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield item
+    except asyncio.CancelledError:
+        logger.info(f"Stream cancelled for run_id: {ctx.run_id}")
+        raise
 
 
 @app.get("/health")
