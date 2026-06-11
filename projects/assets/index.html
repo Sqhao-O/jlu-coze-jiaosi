@@ -56,9 +56,22 @@
         .toggle-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-sidebar); }
         .toggle-btn.active { background: var(--accent); color: #fff; }
 
-        .new-chat-btn { margin: 12px 16px; padding: 10px; border: 1px dashed rgba(255,255,255,0.2); border-radius: var(--radius-sm); background: transparent; color: var(--text-sidebar-muted); cursor: pointer; font-size: 13px; transition: all 0.2s; }
-        .new-chat-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(91,106,191,0.1); }
-        .chat-list { flex: 1; padding: 0 8px; }
+        /* Sidebar actions */
+        .sidebar-actions { padding: 8px 16px; display: flex; gap: 6px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .sidebar-actions button { flex: 1; padding: 8px; border: 1px dashed rgba(255,255,255,0.2); border-radius: var(--radius-sm); background: transparent; color: var(--text-sidebar-muted); cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        .sidebar-actions button:hover { border-color: var(--accent); color: var(--accent); background: rgba(91,106,191,0.1); }
+        .sidebar-actions button.danger:hover { border-color: var(--error); color: var(--error); background: rgba(255,107,107,0.1); }
+
+        /* Chat list */
+        .chat-list { flex: 1; padding: 4px 8px; overflow-y: auto; }
+        .chat-item { display: flex; align-items: center; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; color: var(--text-sidebar-muted); transition: all 0.15s; gap: 8px; }
+        .chat-item:hover { background: rgba(255,255,255,0.06); color: var(--text-sidebar); }
+        .chat-item.active { background: rgba(91,106,191,0.2); color: var(--text-sidebar); }
+        .chat-item .chat-item-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chat-item .chat-item-mode { font-size: 10px; flex-shrink: 0; }
+        .chat-item .chat-item-delete { flex-shrink: 0; width: 20px; height: 20px; border: none; border-radius: 4px; background: transparent; color: var(--text-sidebar-muted); cursor: pointer; font-size: 11px; display: none; align-items: center; justify-content: center; }
+        .chat-item:hover .chat-item-delete { display: flex; }
+        .chat-item .chat-item-delete:hover { background: rgba(255,107,107,0.2); color: var(--error); }
 
         /* Main */
         .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -203,7 +216,10 @@
         </div>
     </div>
 
-    <button class="new-chat-btn" onclick="newChat()">+ 新建对话</button>
+    <div class="sidebar-actions">
+        <button onclick="newChat()">+ 新建对话</button>
+        <button class="danger" onclick="clearAllHistory()" title="清除全部历史记录">🗑 清除全部</button>
+    </div>
     <div class="chat-list" id="chatList"></div>
 </div>
 
@@ -240,13 +256,18 @@
 </div>
 
 <script>
-// ========== 状态 ==========
-let sessionId = 'sess-' + Date.now();
-let isStreaming = false;
-let configLoaded = false;
-let currentMode = 'lesson_prep';  // 当前功能模式
+// ========== 常量 ==========
+const CHAT_STORAGE_KEY = 'jiaosi_chat_history';
 const TEACHER_CONFIG_KEY = 'jiaosi_teacher_config';
 const MODE_CONFIG_KEY = 'jiaosi_mode';
+
+// ========== 状态 ==========
+let isStreaming = false;
+let configLoaded = false;
+let currentMode = 'lesson_prep';
+
+// 当前活跃会话
+let activeSessionId = null;
 
 // 功能模式定义（从 API 加载后更新）
 let MODES = [
@@ -258,6 +279,48 @@ let MODES = [
     { id: 'chat', name: '自由对话', icon: '🗨️', desc: '闲聊或提问' },
 ];
 
+// ========== 聊天记录存储 ==========
+function getAllSessions() {
+    try { return JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '{}'); }
+    catch (e) { return {}; }
+}
+
+function saveAllSessions(sessions) {
+    try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(sessions)); }
+    catch (e) { console.warn('保存聊天记录失败', e); }
+}
+
+function getSession(sessionId) {
+    return getAllSessions()[sessionId] || null;
+}
+
+function saveSession(sessionId, data) {
+    const sessions = getAllSessions();
+    sessions[sessionId] = data;
+    saveAllSessions(sessions);
+}
+
+function deleteSession(sessionId) {
+    const sessions = getAllSessions();
+    delete sessions[sessionId];
+    saveAllSessions(sessions);
+}
+
+function clearAllSessions() {
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+}
+
+function createSessionData(mode, firstMsg) {
+    return {
+        id: 'sess-' + Date.now(),
+        title: firstMsg ? firstMsg.slice(0, 30) : '新对话',
+        mode: mode,
+        messages: [],  // [{role, content}]
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    };
+}
+
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', async () => {
     await loadTeacherConfig();
@@ -265,8 +328,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadSavedMode();
     renderModeSelector();
     setupTextareaAutoResize();
+
+    // 恢复或创建会话
+    const sessions = getAllSessions();
+    const sessionIds = Object.keys(sessions).sort((a, b) => sessions[b].updatedAt - sessions[a].updatedAt);
+    if (sessionIds.length > 0) {
+        switchToSession(sessionIds[0]);
+    } else {
+        newChat();
+    }
+    renderChatList();
 });
 
+// ========== 教师配置加载 ==========
 async function loadTeacherConfig() {
     if (configLoaded) return;
     try {
@@ -280,7 +354,6 @@ async function loadTeacherConfig() {
             fillSelect('teacherDifficulties', config.difficult_points);
             fillSelect('teacherDuration', config.durations);
             fillSelect('teacherStyle', config.styles);
-            // 更新功能模式
             if (config.modes) MODES = config.modes;
             configLoaded = true;
         }
@@ -328,7 +401,6 @@ function renderModeSelector() {
 function selectMode(modeId) {
     currentMode = modeId;
     localStorage.setItem(MODE_CONFIG_KEY, modeId);
-    // 更新按钮状态
     document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === modeId);
     });
@@ -358,7 +430,7 @@ function updateInputPlaceholder() {
     }
 }
 
-// ========== 组合输入：选择 + 自定义切换 ==========
+// ========== 组合输入 ==========
 function toggleCombo(name) {
     const combo = document.getElementById('combo-' + name);
     const btn = combo.querySelector('.toggle-btn');
@@ -437,6 +509,173 @@ function setupTextareaAutoResize() {
     });
 }
 
+// ========== 会话管理 ==========
+function newChat() {
+    // 保存当前会话
+    flushCurrentSession();
+
+    activeSessionId = 'sess-' + Date.now();
+    const sessionData = createSessionData(currentMode);
+    sessionData.id = activeSessionId;
+    saveSession(activeSessionId, sessionData);
+
+    // 清空消息区域
+    clearMessagesArea();
+    setProgress(0);
+    setStatus('就绪');
+    renderChatList();
+}
+
+function switchToSession(sessionId) {
+    if (isStreaming) return;
+    // 保存当前会话
+    flushCurrentSession();
+
+    activeSessionId = sessionId;
+    const session = getSession(sessionId);
+    if (!session) {
+        newChat();
+        return;
+    }
+
+    // 恢复模式
+    if (session.mode && MODES.find(m => m.id === session.mode)) {
+        currentMode = session.mode;
+        localStorage.setItem(MODE_CONFIG_KEY, currentMode);
+        renderModeSelector();
+    }
+
+    // 恢复消息
+    restoreMessages(session.messages || []);
+    setProgress(0);
+    setStatus('就绪');
+    renderChatList();
+}
+
+function flushCurrentSession() {
+    if (!activeSessionId) return;
+    // 从 DOM 读取当前消息并保存
+    const messages = collectMessagesFromDOM();
+    const session = getSession(activeSessionId);
+    if (session) {
+        session.messages = messages;
+        session.updatedAt = Date.now();
+        if (messages.length > 0) {
+            const firstUser = messages.find(m => m.role === 'user');
+            session.title = firstUser ? firstUser.content.slice(0, 30) : '新对话';
+        }
+        saveSession(activeSessionId, session);
+    }
+}
+
+function collectMessagesFromDOM() {
+    const area = document.getElementById('messagesArea');
+    const msgEls = area.querySelectorAll('.message');
+    const messages = [];
+    msgEls.forEach(el => {
+        const role = el.classList.contains('user') ? 'user' : 'assistant';
+        const bubble = el.querySelector('.bubble');
+        if (!bubble) return;
+        // 用户消息直接取文本
+        if (role === 'user') {
+            messages.push({ role, content: bubble.textContent });
+        } else {
+            // 助手消息取 Markdown 原文（存在 data-raw 属性）
+            const raw = bubble.getAttribute('data-raw') || bubble.textContent;
+            messages.push({ role, content: raw });
+        }
+    });
+    return messages;
+}
+
+function clearMessagesArea() {
+    document.getElementById('messagesArea').innerHTML = `<div class="empty-state" id="emptyState">
+        <div class="icon">📚</div>
+        <div class="hint">选择功能模式，设置备课参数，输入课题即可开始</div>
+        <div class="sub-hint">所有参数均支持选择或自定义输入</div>
+    </div>`;
+}
+
+function restoreMessages(messages) {
+    clearMessagesArea();
+    const area = document.getElementById('messagesArea');
+    const empty = document.getElementById('emptyState');
+    if (messages.length > 0 && empty) empty.style.display = 'none';
+
+    messages.forEach(msg => {
+        const el = document.createElement('div');
+        el.className = `message ${msg.role}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        if (msg.role === 'assistant') {
+            bubble.innerHTML = renderMarkdown(msg.content);
+            bubble.setAttribute('data-raw', msg.content);
+        } else {
+            bubble.textContent = msg.content;
+        }
+        el.appendChild(bubble);
+        area.appendChild(el);
+    });
+    area.scrollTop = area.scrollHeight;
+}
+
+function deleteChatSession(sessionId, e) {
+    e.stopPropagation();
+    deleteSession(sessionId);
+    if (activeSessionId === sessionId) {
+        const sessions = getAllSessions();
+        const ids = Object.keys(sessions).sort((a, b) => sessions[b].updatedAt - sessions[a].updatedAt);
+        if (ids.length > 0) {
+            switchToSession(ids[0]);
+        } else {
+            newChat();
+        }
+    }
+    renderChatList();
+}
+
+function clearAllHistory() {
+    if (!confirm('确定要清除全部聊天记录吗？此操作不可撤销。')) return;
+    clearAllSessions();
+    activeSessionId = null;
+    newChat();
+    renderChatList();
+}
+
+// ========== 会话列表渲染 ==========
+function renderChatList() {
+    const list = document.getElementById('chatList');
+    const sessions = getAllSessions();
+    const ids = Object.keys(sessions).sort((a, b) => sessions[b].updatedAt - sessions[a].updatedAt);
+
+    if (ids.length === 0) {
+        list.innerHTML = '<div style="padding:16px;color:var(--text-sidebar-muted);font-size:12px;text-align:center;">暂无对话记录</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    ids.forEach(sid => {
+        const s = sessions[sid];
+        const item = document.createElement('div');
+        item.className = 'chat-item' + (sid === activeSessionId ? ' active' : '');
+        item.onclick = () => switchToSession(sid);
+
+        const modeInfo = MODES.find(m => m.id === s.mode);
+        const modeLabel = modeInfo ? modeInfo.icon : '📝';
+
+        item.innerHTML = `<span class="chat-item-mode">${modeLabel}</span>
+            <span class="chat-item-text">${escapeHtml(s.title || '新对话')}</span>
+            <button class="chat-item-delete" onclick="deleteChatSession('${sid}', event)" title="删除此对话">×</button>`;
+        list.appendChild(item);
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ========== 消息 ==========
 function addMessage(role, content) {
     const area = document.getElementById('messagesArea');
@@ -451,6 +690,7 @@ function addMessage(role, content) {
 
     if (role === 'assistant') {
         bubble.innerHTML = renderMarkdown(content);
+        bubble.setAttribute('data-raw', content);
     } else {
         bubble.textContent = content;
     }
@@ -510,16 +750,25 @@ async function sendMessage() {
 
     saveTeacherInfo();
 
+    // 保存用户消息到会话
     addMessage('user', text);
+    appendToSession('user', text);
+
     input.value = '';
     input.style.height = 'auto';
+
+    // 构建历史 messages（上下文联动）
+    const session = getSession(activeSessionId);
+    const historyMessages = (session ? session.messages : []).map(m => ({
+        role: m.role,
+        content: m.content,
+    }));
 
     const teacherInfo = getTeacherInfo();
 
     isStreaming = true;
     document.getElementById('sendBtn').disabled = true;
 
-    // 根据模式设置状态文字
     const modeInfo = MODES.find(m => m.id === currentMode);
     setStatus(modeInfo ? `${modeInfo.name}中...` : '生成中...');
     setProgress(5, true);
@@ -528,11 +777,15 @@ async function sendMessage() {
     let fullText = '';
 
     try {
-        await sendStreamRequest(text, teacherInfo, currentMode, bubble, (chunk) => {
+        await sendStreamRequest(historyMessages, teacherInfo, currentMode, bubble, (chunk) => {
             fullText += chunk;
             bubble.innerHTML = renderMarkdown(fullText);
+            bubble.setAttribute('data-raw', fullText);
             document.getElementById('messagesArea').scrollTop = document.getElementById('messagesArea').scrollHeight;
         });
+
+        // 保存助手回复到会话
+        appendToSession('assistant', fullText);
     } catch (e) {
         console.error('Request error:', e);
         bubble.innerHTML = `<span style="color:var(--error)">请求出错: ${e.message}</span>`;
@@ -545,15 +798,29 @@ async function sendMessage() {
     }
 }
 
-async function sendStreamRequest(userText, teacherInfo, mode, bubble, onChunk) {
+function appendToSession(role, content) {
+    if (!activeSessionId) return;
+    const session = getSession(activeSessionId);
+    if (!session) return;
+    session.messages.push({ role, content });
+    session.updatedAt = Date.now();
+    // 更新标题（取第一条用户消息）
+    if (role === 'user' && session.messages.filter(m => m.role === 'user').length === 1) {
+        session.title = content.slice(0, 30);
+    }
+    saveSession(activeSessionId, session);
+    renderChatList();
+}
+
+async function sendStreamRequest(historyMessages, teacherInfo, mode, bubble, onChunk) {
     const payload = {
         model: 'vibe-coding',
-        messages: [{ role: 'user', content: userText }],
+        messages: historyMessages,
         stream: true,
-        session_id: sessionId,
+        session_id: activeSessionId,
         extra_body: {
             ...teacherInfo,
-            mode: mode,   // 功能模式由前端显式传入
+            mode: mode,
         }
     };
 
@@ -630,18 +897,6 @@ function getSubjectExample(subject) {
         '历史': '文艺复兴', '地理': '气候类型', '政治': '市场经济',
     };
     return examples[subject] || '课题名称';
-}
-
-function newChat() {
-    sessionId = 'sess-' + Date.now();
-    const area = document.getElementById('messagesArea');
-    area.innerHTML = `<div class="empty-state" id="emptyState">
-        <div class="icon">📚</div>
-        <div class="hint">选择功能模式，设置备课参数，输入课题即可开始</div>
-        <div class="sub-hint">所有参数均支持选择或自定义输入</div>
-    </div>`;
-    setProgress(0);
-    setStatus('就绪');
 }
 </script>
 </body>
