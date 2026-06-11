@@ -40,7 +40,7 @@
 - **依赖安装**: `bash scripts/setup.sh`
 - **API 端点**:
   - `POST /v1/chat/completions` — OpenAI 兼容流式接口
-  - `GET /api/teacher-config` — 教师配置选项（学科/年级/风格等）
+  - `GET /api/teacher-config` — 教师配置选项（学科/年级/教学目标/重点/难点/时长/风格）
   - `GET /` — 前端页面
   - `GET /health` — 健康检查
 
@@ -67,7 +67,8 @@ intent_router → [chat] → chat_reply → format_output
 - `text_sent_via_messages` 去重标记防止闲聊场景重复推送
 
 ### 前端参数化输入
-- 左侧面板：教师信息配置（姓名、教龄、学科、年级、课型、风格偏好）
+- 左侧面板：7 个核心参数（学科、年级、教学目标、重点、难点、课时时长、教学风格）
+- 每个参数支持「下拉选择 + 自定义输入」两种模式，点击切换按钮即可切换
 - 底部任务选择：备课模式/闲聊模式一键切换
 - 备课模式下输入框变为"课题"输入，无需手写提示词
 
@@ -90,5 +91,5 @@ intent_router → [chat] → chat_reply → format_output
 4. **cozeloop 兼容性**：LangChain 1.0 移除了 `langchain.callbacks` 模块，需要 `cozeloop >= 0.1.28` 才能兼容
 5. **http_run.sh 幂等性**：脚本启动前会 `fuser -k` 清理端口残留进程，确保重复执行不会冲突
 6. **闲聊场景 format_output**：`node_format_output` 在 `intent != "lesson_prep"` 时直接透传 `chat_reply` 的消息，不生成空教案模板
-7. **教师信息注入**：前端通过 `extra_body` 传递教师配置，后端在 `stream_input` 中注入 `teacher_info` 字典，`generate_lesson_plan` 节点从 state 中读取并嵌入 prompt
+7. **教师信息注入**：前端通过 `extra_body` 传递备课参数（学科/年级/教学目标/重点/难点/课时时长/教学风格），后端在 `stream_input` 中注入，`generate_lesson_plan` 节点从 state 中读取并嵌入 prompt
 8. **教案生成耗时**：单次 LLM 调用约 10-30 秒完成完整教案，远快于原 11 节点串行方案的 2-5 分钟

@@ -187,15 +187,14 @@ def node_generate_lesson_plan(state: LessonPrepState) -> dict:
     client = LLMClient(ctx=ctx)
 
     # 从 state 中提取参数
-    subject = state.get("lesson_subject", "未指定")
+    subject = state.get("lesson_subject", "")
     topic = state.get("lesson_topic", "")
-    grade = state.get("lesson_grade", "未指定")
-    hours = state.get("lesson_hours", 1)
-    lesson_type = state.get("lesson_type", "新授课")
-    style = state.get("style_preference", "混合型")
-    teacher = state.get("teacher_name", "")
-    experience = state.get("years_of_experience", 5)
-    concerns = state.get("key_concerns", "")
+    grade = state.get("lesson_grade", "")
+    objectives = state.get("lesson_objectives", "")
+    key_pts = state.get("key_points", "")
+    difficult_pts = state.get("difficult_points", "")
+    duration = state.get("lesson_duration", 45)
+    style = state.get("style_preference", "")
 
     # 如果课题为空，从用户消息中提取
     if not topic:
@@ -206,18 +205,21 @@ def node_generate_lesson_plan(state: LessonPrepState) -> dict:
             topic = user_input[:50]  # 取前50字作为课题
 
     # 构建用户消息
-    user_parts = [
-        f"学科：{subject}",
-        f"课题：{topic}",
-        f"年级：{grade}",
-        f"课时：{hours}",
-        f"课型：{lesson_type}",
-        f"教学风格：{style}",
-    ]
-    if teacher:
-        user_parts.append(f"教师：{teacher}（教龄{experience}年）")
-    if concerns:
-        user_parts.append(f"特别关注：{concerns}")
+    user_parts = []
+    if subject:
+        user_parts.append(f"学科：{subject}")
+    user_parts.append(f"课题：{topic or '未指定'}")
+    if grade:
+        user_parts.append(f"年级：{grade}")
+    if objectives:
+        user_parts.append(f"教学目标：{objectives}")
+    if key_pts:
+        user_parts.append(f"教学重点：{key_pts}")
+    if difficult_pts:
+        user_parts.append(f"教学难点：{difficult_pts}")
+    user_parts.append(f"课时时长：{duration}分钟")
+    if style:
+        user_parts.append(f"教学风格：{style}")
 
     user_content = "请为以下需求生成完整教案：\n" + "\n".join(user_parts)
 

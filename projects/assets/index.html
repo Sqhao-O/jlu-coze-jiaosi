@@ -113,6 +113,48 @@
         }
         .form-row .form-group { flex: 1; }
 
+        /* 组合输入控件：选择 + 自定义切换 */
+        .combo-input {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .combo-input select,
+        .combo-input input {
+            flex: 1;
+            min-width: 0;
+        }
+        .combo-input .toggle-btn {
+            width: 28px; height: 28px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            font-size: 11px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+        .combo-input .toggle-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .combo-input .toggle-btn.active {
+            background: var(--accent-light);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .combo-input .custom-input {
+            display: none;
+        }
+        .combo-input.custom-mode .select-input {
+            display: none;
+        }
+        .combo-input.custom-mode .custom-input {
+            display: block;
+        }
+
         /* 对话列表 */
         .chat-list {
             flex: 1;
@@ -375,29 +417,65 @@
 
     <!-- 教师信息面板 -->
     <div class="teacher-panel">
-        <h3>教师信息</h3>
+        <h3>备课参数</h3>
         <div class="form-group">
-            <label>姓名</label>
-            <input type="text" id="teacherName" placeholder="请输入姓名">
+            <label>学科</label>
+            <div class="combo-input" id="combo-subject">
+                <div class="select-input"><select id="teacherSubject"><option value="">选择学科</option></select></div>
+                <div class="custom-input"><input type="text" id="teacherSubjectCustom" placeholder="输入自定义学科"></div>
+                <button class="toggle-btn" onclick="toggleCombo('subject')" title="切换自定义输入">✏</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>年级</label>
+            <div class="combo-input" id="combo-grade">
+                <div class="select-input"><select id="teacherGrade"><option value="">选择年级</option></select></div>
+                <div class="custom-input"><input type="text" id="teacherGradeCustom" placeholder="输入自定义年级"></div>
+                <button class="toggle-btn" onclick="toggleCombo('grade')" title="切换自定义输入">✏</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>教学目标</label>
+            <div class="combo-input" id="combo-objectives">
+                <div class="select-input"><select id="teacherObjectives"><option value="">选择教学目标</option></select></div>
+                <div class="custom-input"><input type="text" id="teacherObjectivesCustom" placeholder="输入自定义教学目标"></div>
+                <button class="toggle-btn" onclick="toggleCombo('objectives')" title="切换自定义输入">✏</button>
+            </div>
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label>学科</label>
-                <select id="teacherSubject"><option value="">选择学科</option></select>
+                <label>重点</label>
+                <div class="combo-input" id="combo-keypoints">
+                    <div class="select-input"><select id="teacherKeyPoints"><option value="">选择重点</option></select></div>
+                    <div class="custom-input"><input type="text" id="teacherKeyPointsCustom" placeholder="自定义重点"></div>
+                    <button class="toggle-btn" onclick="toggleCombo('keypoints')" title="切换自定义输入">✏</button>
+                </div>
             </div>
             <div class="form-group">
-                <label>年级</label>
-                <select id="teacherGrade"><option value="">选择年级</option></select>
+                <label>难点</label>
+                <div class="combo-input" id="combo-difficulties">
+                    <div class="select-input"><select id="teacherDifficulties"><option value="">选择难点</option></select></div>
+                    <div class="custom-input"><input type="text" id="teacherDifficultiesCustom" placeholder="自定义难点"></div>
+                    <button class="toggle-btn" onclick="toggleCombo('difficulties')" title="切换自定义输入">✏</button>
+                </div>
             </div>
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label>教龄</label>
-                <input type="number" id="teacherExp" placeholder="年" min="0" max="50" value="">
+                <label>课时时长</label>
+                <div class="combo-input" id="combo-duration">
+                    <div class="select-input"><select id="teacherDuration"><option value="">选择时长</option></select></div>
+                    <div class="custom-input"><input type="number" id="teacherDurationCustom" placeholder="分钟" min="1" max="180"></div>
+                    <button class="toggle-btn" onclick="toggleCombo('duration')" title="切换自定义输入">✏</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>教学风格</label>
-                <select id="teacherStyle"><option value="">选择风格</option></select>
+                <div class="combo-input" id="combo-style">
+                    <div class="select-input"><select id="teacherStyle"><option value="">选择风格</option></select></div>
+                    <div class="custom-input"><input type="text" id="teacherStyleCustom" placeholder="自定义风格"></div>
+                    <button class="toggle-btn" onclick="toggleCombo('style')" title="切换自定义输入">✏</button>
+                </div>
             </div>
         </div>
     </div>
@@ -417,8 +495,8 @@
     <div class="messages" id="messagesArea">
         <div class="empty-state" id="emptyState">
             <div class="icon">📚</div>
-            <div class="hint">选择学科和年级，输入课题即可一键备课</div>
-            <div class="sub-hint">无需编写提示词，AI 自动生成完整教案</div>
+            <div class="hint">设置备课参数，输入课题即可一键生成教案</div>
+            <div class="sub-hint">所有参数均支持选择或自定义输入</div>
         </div>
     </div>
 
@@ -458,6 +536,10 @@ async function loadTeacherConfig() {
             const config = await resp.json();
             fillSelect('teacherSubject', config.subjects);
             fillSelect('teacherGrade', config.grades);
+            fillSelect('teacherObjectives', config.objectives);
+            fillSelect('teacherKeyPoints', config.key_points);
+            fillSelect('teacherDifficulties', config.difficult_points);
+            fillSelect('teacherDuration', config.durations);
             fillSelect('teacherStyle', config.styles);
             configLoaded = true;
         }
@@ -465,6 +547,10 @@ async function loadTeacherConfig() {
         console.warn('Failed to load teacher config, using defaults');
         fillSelect('teacherSubject', ['语文','数学','英语','物理','化学','生物','历史','地理','政治']);
         fillSelect('teacherGrade', ['一年级','二年级','三年级','四年级','五年级','六年级','初一','初二','初三','高一','高二','高三']);
+        fillSelect('teacherObjectives', ['知识与技能','过程与方法','情感态度与价值观','核心素养导向','综合能力培养']);
+        fillSelect('teacherKeyPoints', ['概念理解','公式推导','方法掌握','技能训练','思维培养','知识应用']);
+        fillSelect('teacherDifficulties', ['抽象概念理解','复杂计算','逻辑推理','知识迁移','综合应用','创新思维']);
+        fillSelect('teacherDuration', [20, 30, 40, 45, 60, 90]);
         fillSelect('teacherStyle', ['启发式互动型','系统讲授型','情感体验型','任务驱动型','混合型']);
         configLoaded = true;
     }
@@ -482,14 +568,59 @@ function fillSelect(id, options) {
     });
 }
 
+// ========== 组合输入：选择 + 自定义切换 ==========
+function toggleCombo(name) {
+    const combo = document.getElementById('combo-' + name);
+    const btn = combo.querySelector('.toggle-btn');
+    const isCustom = combo.classList.toggle('custom-mode');
+    btn.classList.toggle('active', isCustom);
+    // 如果从自定义切回选择，清空自定义输入
+    if (!isCustom) {
+        const customInput = combo.querySelector('.custom-input input');
+        if (customInput) customInput.value = '';
+    }
+}
+
+function getComboValue(name) {
+    const combo = document.getElementById('combo-' + name);
+    if (combo.classList.contains('custom-mode')) {
+        const input = combo.querySelector('.custom-input input');
+        return input ? input.value.trim() : '';
+    } else {
+        const sel = combo.querySelector('.select-input select');
+        return sel ? sel.value : '';
+    }
+}
+
+function setComboValue(name, value) {
+    const combo = document.getElementById('combo-' + name);
+    const sel = combo.querySelector('.select-input select');
+    const customInput = combo.querySelector('.custom-input input');
+    if (!value) return;
+    // 先尝试设置 select
+    if (sel) {
+        const opt = Array.from(sel.options).find(o => o.value === value);
+        if (opt) {
+            sel.value = value;
+            return;
+        }
+    }
+    // 不在预设选项中，切换到自定义模式
+    combo.classList.add('custom-mode');
+    combo.querySelector('.toggle-btn').classList.add('active');
+    if (customInput) customInput.value = value;
+}
+
 function loadSavedTeacherInfo() {
     try {
         const saved = JSON.parse(localStorage.getItem(TEACHER_CONFIG_KEY) || '{}');
-        if (saved.teacherName) document.getElementById('teacherName').value = saved.teacherName;
-        if (saved.teacherSubject) document.getElementById('teacherSubject').value = saved.teacherSubject;
-        if (saved.teacherGrade) document.getElementById('teacherGrade').value = saved.teacherGrade;
-        if (saved.teacherExp) document.getElementById('teacherExp').value = saved.teacherExp;
-        if (saved.teacherStyle) document.getElementById('teacherStyle').value = saved.teacherStyle;
+        if (saved.lesson_subject) setComboValue('subject', saved.lesson_subject);
+        if (saved.lesson_grade) setComboValue('grade', saved.lesson_grade);
+        if (saved.lesson_objectives) setComboValue('objectives', saved.lesson_objectives);
+        if (saved.key_points) setComboValue('keypoints', saved.key_points);
+        if (saved.difficult_points) setComboValue('difficulties', saved.difficult_points);
+        if (saved.lesson_duration) setComboValue('duration', String(saved.lesson_duration));
+        if (saved.style_preference) setComboValue('style', saved.style_preference);
     } catch (e) {}
 }
 
@@ -500,11 +631,13 @@ function saveTeacherInfo() {
 
 function getTeacherInfo() {
     return {
-        teacherName: document.getElementById('teacherName').value.trim(),
-        lesson_subject: document.getElementById('teacherSubject').value,
-        lesson_grade: document.getElementById('teacherGrade').value,
-        years_of_experience: parseInt(document.getElementById('teacherExp').value) || 0,
-        style_preference: document.getElementById('teacherStyle').value,
+        lesson_subject: getComboValue('subject'),
+        lesson_grade: getComboValue('grade'),
+        lesson_objectives: getComboValue('objectives'),
+        key_points: getComboValue('keypoints'),
+        difficult_points: getComboValue('difficulties'),
+        lesson_duration: parseInt(getComboValue('duration')) || 0,
+        style_preference: getComboValue('style'),
     };
 }
 
@@ -634,9 +767,11 @@ async function sendStreamRequest(userText, teacherInfo, bubble, onChunk) {
         extra_body: {
             lesson_subject: teacherInfo.lesson_subject,
             lesson_grade: teacherInfo.lesson_grade,
+            lesson_objectives: teacherInfo.lesson_objectives,
+            key_points: teacherInfo.key_points,
+            difficult_points: teacherInfo.difficult_points,
+            lesson_duration: teacherInfo.lesson_duration,
             style_preference: teacherInfo.style_preference,
-            teacher_name: teacherInfo.teacherName,
-            years_of_experience: teacherInfo.years_of_experience,
         }
     };
 
@@ -715,16 +850,13 @@ function handleKeydown(e) {
 
 // ========== 快捷操作 ==========
 function quickAction(type) {
-    const subject = document.getElementById('teacherSubject').value;
-    const grade = document.getElementById('teacherGrade').value;
+    const subject = getComboValue('subject');
     const input = document.getElementById('userInput');
 
     if (type === '备课') {
-        if (!subject) {
-            alert('请先在左侧选择学科');
-            return;
-        }
-        input.placeholder = `输入${subject}课题，如：${getSubjectExample(subject)}`;
+        input.placeholder = subject
+            ? `输入${subject}课题，如：${getSubjectExample(subject)}`
+            : '输入课题名称';
         input.focus();
     } else {
         input.placeholder = '输入你想聊的话题...';
@@ -746,8 +878,8 @@ function newChat() {
     const area = document.getElementById('messagesArea');
     area.innerHTML = `<div class="empty-state" id="emptyState">
         <div class="icon">📚</div>
-        <div class="hint">选择学科和年级，输入课题即可一键备课</div>
-        <div class="sub-hint">无需编写提示词，AI 自动生成完整教案</div>
+        <div class="hint">设置备课参数，输入课题即可一键生成教案</div>
+        <div class="sub-hint">所有参数均支持选择或自定义输入</div>
     </div>`;
     setProgress(0);
     setStatus('就绪');

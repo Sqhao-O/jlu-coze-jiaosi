@@ -207,7 +207,10 @@ TEACHER_CONFIG = {
     "subjects": ["语文", "数学", "英语", "物理", "化学", "生物", "历史", "地理", "政治", "体育", "音乐", "美术", "信息技术"],
     "grades": ["一年级", "二年级", "三年级", "四年级", "五年级", "六年级",
                "初一", "初二", "初三", "高一", "高二", "高三"],
-    "lesson_types": ["新授课", "复习课", "习题课", "实验课", "综合课"],
+    "objectives": ["知识与技能", "过程与方法", "情感态度与价值观", "核心素养导向", "综合能力培养"],
+    "key_points": ["概念理解", "公式推导", "方法掌握", "技能训练", "思维培养", "知识应用"],
+    "difficult_points": ["抽象概念理解", "复杂计算", "逻辑推理", "知识迁移", "综合应用", "创新思维"],
+    "durations": [20, 30, 40, 45, 60, 90],
     "styles": ["启发式互动型", "系统讲授型", "情感体验型", "任务驱动型", "混合型"],
 }
 
@@ -404,8 +407,9 @@ async def openai_chat_completions(request: Request):
 
         # 注入教师信息到 state（从前端 extra_body 传入）
         extra = payload.get("extra_body", {}) or {}
-        for field in ["lesson_subject", "lesson_grade", "lesson_type", "style_preference",
-                       "teacher_name", "years_of_experience", "key_concerns", "lesson_topic"]:
+        for field in ["lesson_subject", "lesson_grade", "lesson_objectives",
+                       "key_points", "difficult_points", "lesson_duration",
+                       "style_preference", "lesson_topic"]:
             if extra.get(field):
                 stream_input[field] = extra[field]
 
