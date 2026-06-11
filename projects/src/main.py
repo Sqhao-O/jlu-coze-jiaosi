@@ -212,6 +212,14 @@ TEACHER_CONFIG = {
     "difficult_points": ["抽象概念理解", "复杂计算", "逻辑推理", "知识迁移", "综合应用", "创新思维"],
     "durations": [20, 30, 40, 45, 60, 90],
     "styles": ["启发式互动型", "系统讲授型", "情感体验型", "任务驱动型", "混合型"],
+    "modes": [
+        {"id": "lesson_prep",        "name": "教案生成", "icon": "📋", "desc": "生成完整结构化教案"},
+        {"id": "classroom_sim",      "name": "课堂预演", "icon": "🎭", "desc": "预判课堂意外情境与应对"},
+        {"id": "blind_spot",         "name": "盲区检测", "icon": "🔍", "desc": "发现教案中的逻辑漏洞"},
+        {"id": "student_sim",        "name": "学情推演", "icon": "👥", "desc": "模拟不同学生的思维路径"},
+        {"id": "interaction_design", "name": "互动设计", "icon": "💬", "desc": "设计师生互动方案和话术"},
+        {"id": "chat",               "name": "自由对话", "icon": "🗨️", "desc": "闲聊或提问"},
+    ],
 }
 
 
@@ -353,6 +361,10 @@ NODE_PROGRESS_MAP = {
     "intent_router":           "intent",
     "chat_reply":              "intent",
     "generate_lesson_plan":    "generating",
+    "simulate_classroom":      "generating",
+    "detect_blindspots":       "generating",
+    "simulate_students":       "generating",
+    "design_interactions":     "generating",
     "format_output":           "formatting",
 }
 
@@ -405,11 +417,11 @@ async def openai_chat_completions(request: Request):
                 status_code=400,
             )
 
-        # 注入教师信息到 state（从前端 extra_body 传入）
+        # 注入教师信息和 mode 到 state（从前端 extra_body 传入）
         extra = payload.get("extra_body", {}) or {}
         for field in ["lesson_subject", "lesson_grade", "lesson_objectives",
                        "key_points", "difficult_points", "lesson_duration",
-                       "style_preference", "lesson_topic"]:
+                       "style_preference", "lesson_topic", "mode"]:
             if extra.get(field):
                 stream_input[field] = extra[field]
 
@@ -492,16 +504,16 @@ async def _filtered_stream_generator(
                                     })
                                 )
 
-                            # format_output: 提取最终教案
+                            # format_output: 提取最终输出
                             if node_name == "format_output" and isinstance(node_output, dict) and not text_sent_via_messages:
-                                lesson_plan = node_output.get("final_lesson_plan", "")
-                                if lesson_plan:
+                                output_text = node_output.get("final_output", "")
+                                if output_text:
                                     if not sent_role:
                                         sent_role = True
                                         loop.call_soon_threadsafe(queue.put_nowait,
                                             _build_openai_chunk(request_id, model, created, delta_role="assistant"))
                                     loop.call_soon_threadsafe(queue.put_nowait,
-                                        _build_openai_chunk(request_id, model, created, delta_content=lesson_plan))
+                                        _build_openai_chunk(request_id, model, created, delta_content=output_text))
                     continue
 
                 # --- messages 模式：LLM token 流（只放行 chat_reply） ---

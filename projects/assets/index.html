@@ -3,404 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>教思 — AI 教学助手</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+    <title>教思 AI 教学助手</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
-            --bg-primary: #f8fafc;
-            --bg-secondary: #ffffff;
-            --bg-tertiary: #f1f5f9;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --text-muted: #94a3b8;
-            --accent: #2563eb;
-            --accent-hover: #1d4ed8;
-            --accent-light: rgba(37, 99, 235, 0.08);
-            --user-bubble: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-            --ai-bubble-bg: #ffffff;
-            --border: #e2e8f0;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --error: #ef4444;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-            --shadow: 0 1px 3px rgba(0,0,0,0.08);
-            --radius: 12px;
-            --radius-sm: 8px;
-            --sidebar-width: 280px;
+            --bg-primary: #f8f9fa; --bg-secondary: #ffffff; --bg-sidebar: #1a1a2e;
+            --text-primary: #212529; --text-secondary: #495057; --text-muted: #868e96;
+            --text-sidebar: #e9ecef; --text-sidebar-muted: #adb5bd;
+            --border: #dee2e6; --border-light: #e9ecef;
+            --accent: #5b6abf; --accent-hover: #4a579e; --accent-light: #eef0ff;
+            --success: #51cf66; --error: #ff6b6b; --warning: #ffd43b;
+            --radius: 12px; --radius-sm: 8px;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; display: flex; }
 
-        /* ========== Sidebar ========== */
-        .sidebar {
-            width: var(--sidebar-width);
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-        }
-        .sidebar-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .sidebar-logo {
-            width: 36px; height: 36px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border-radius: var(--radius-sm);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px; color: white;
-        }
-        .sidebar-title { font-size: 16px; font-weight: 700; }
-        .sidebar-subtitle { font-size: 11px; color: var(--text-muted); }
+        /* Sidebar */
+        .sidebar { width: 280px; background: var(--bg-sidebar); color: var(--text-sidebar); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+        .sidebar-header { padding: 20px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .sidebar-logo { font-size: 28px; }
+        .sidebar-title { font-size: 18px; font-weight: 700; }
+        .sidebar-subtitle { font-size: 11px; color: var(--text-sidebar-muted); margin-top: 2px; }
 
-        /* 教师信息面板 */
-        .teacher-panel {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border);
-        }
-        .teacher-panel h3 {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 12px;
-        }
-        .form-group {
-            margin-bottom: 10px;
-        }
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-            font-weight: 500;
-        }
-        .form-group select,
-        .form-group input {
-            width: 100%;
-            padding: 7px 10px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            font-size: 13px;
-            color: var(--text-primary);
-            background: var(--bg-primary);
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .form-group select:focus,
-        .form-group input:focus {
-            border-color: var(--accent);
-        }
-        .form-row {
-            display: flex;
-            gap: 8px;
-        }
-        .form-row .form-group { flex: 1; }
+        .teacher-panel { padding: 16px; }
+        .teacher-panel h3 { font-size: 13px; color: var(--text-sidebar-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 12px; color: var(--text-sidebar-muted); margin-bottom: 4px; }
+        .form-row { display: flex; gap: 8px; }
+        .form-row .form-group { flex: 1; min-width: 0; }
 
-        /* 组合输入控件：选择 + 自定义切换 */
-        .combo-input {
-            display: flex;
-            gap: 4px;
-            align-items: center;
+        /* Combo input: select + custom toggle */
+        .combo-input { position: relative; }
+        .combo-input .select-input,
+        .combo-input .custom-input { display: block; }
+        .combo-input .custom-input { display: none; }
+        .combo-input.custom-mode .select-input { display: none; }
+        .combo-input.custom-mode .custom-input { display: block; }
+        .combo-input select, .combo-input input {
+            width: 100%; padding: 7px 10px; border: 1px solid rgba(255,255,255,0.12);
+            border-radius: var(--radius-sm); background: rgba(255,255,255,0.06);
+            color: var(--text-sidebar); font-size: 13px; outline: none; transition: border-color 0.2s;
         }
-        .combo-input select,
-        .combo-input input {
-            flex: 1;
-            min-width: 0;
-        }
-        .combo-input .toggle-btn {
-            width: 28px; height: 28px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            background: var(--bg-tertiary);
-            color: var(--text-muted);
-            font-size: 11px;
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
+        .combo-input select:focus, .combo-input input:focus { border-color: var(--accent); }
+        .combo-input select option { background: #2a2a4a; color: #fff; }
+        .toggle-btn {
+            position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+            width: 24px; height: 24px; border: none; border-radius: 4px;
+            background: rgba(255,255,255,0.08); color: var(--text-sidebar-muted);
+            cursor: pointer; font-size: 11px; line-height: 24px; text-align: center;
             transition: all 0.15s;
         }
-        .combo-input .toggle-btn:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-        .combo-input .toggle-btn.active {
-            background: var(--accent-light);
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-        .combo-input .custom-input {
-            display: none;
-        }
-        .combo-input.custom-mode .select-input {
-            display: none;
-        }
-        .combo-input.custom-mode .custom-input {
-            display: block;
-        }
+        .toggle-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-sidebar); }
+        .toggle-btn.active { background: var(--accent); color: #fff; }
 
-        /* 对话列表 */
-        .chat-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px;
-        }
-        .chat-item {
-            padding: 10px 12px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 13px;
-            color: var(--text-secondary);
-            transition: all 0.15s;
-            margin-bottom: 2px;
-        }
-        .chat-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-        .chat-item.active { background: var(--accent-light); color: var(--accent); font-weight: 500; }
+        .new-chat-btn { margin: 12px 16px; padding: 10px; border: 1px dashed rgba(255,255,255,0.2); border-radius: var(--radius-sm); background: transparent; color: var(--text-sidebar-muted); cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .new-chat-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(91,106,191,0.1); }
+        .chat-list { flex: 1; padding: 0 8px; }
 
-        .new-chat-btn {
-            margin: 12px 16px;
-            padding: 9px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: var(--radius-sm);
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .new-chat-btn:hover { background: var(--accent-hover); }
+        /* Main */
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
-        /* ========== Main ========== */
-        .main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
+        /* Topbar */
+        .topbar { padding: 12px 20px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; background: var(--bg-secondary); }
+        .topbar-title { font-size: 15px; font-weight: 600; }
+        .topbar-badge { font-size: 11px; padding: 3px 10px; border-radius: 99px; background: var(--accent-light); color: var(--accent); font-weight: 500; }
 
-        /* 顶部栏 */
-        .topbar {
-            padding: 12px 24px;
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-secondary);
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-        .topbar-title {
-            font-size: 15px;
-            font-weight: 600;
-        }
-        .topbar-badge {
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 99px;
-            background: var(--accent-light);
-            color: var(--accent);
-            font-weight: 500;
-        }
+        /* Mode Selector */
+        .mode-selector { padding: 10px 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-light); display: flex; gap: 6px; overflow-x: auto; }
+        .mode-btn { display: flex; align-items: center; gap: 5px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 99px; background: var(--bg-primary); color: var(--text-secondary); cursor: pointer; font-size: 13px; white-space: nowrap; transition: all 0.15s; }
+        .mode-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+        .mode-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+        .mode-btn .mode-icon { font-size: 14px; }
 
-        /* 进度条 */
-        .progress-bar {
-            height: 3px;
-            background: var(--border);
-            position: relative;
-            overflow: hidden;
-        }
-        .progress-bar .fill {
-            height: 100%;
-            background: var(--accent);
-            width: 0%;
-            transition: width 0.3s;
-        }
-        .progress-bar.active .fill {
-            animation: progressPulse 1.5s ease-in-out infinite;
-        }
-        @keyframes progressPulse {
-            0%, 100% { opacity: 0.6; }
-            50% { opacity: 1; }
-        }
+        /* Progress */
+        .progress-bar { height: 3px; background: var(--border-light); overflow: hidden; }
+        .progress-bar .fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--success)); transition: width 0.3s; }
+        .progress-bar.active .fill { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
-        /* 消息区域 */
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-        }
-        .message {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 12px;
-            animation: fadeIn 0.3s;
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
-
+        /* Messages */
+        .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+        .message { display: flex; }
         .message.user { justify-content: flex-end; }
-        .message.user .bubble {
-            background: var(--user-bubble);
-            color: white;
-            border-radius: 16px 16px 4px 16px;
-            padding: 10px 16px;
-            max-width: 70%;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        .message.assistant .bubble {
-            background: var(--ai-bubble-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px 16px 16px 4px;
-            padding: 16px 20px;
-            max-width: 85%;
-            font-size: 14px;
-            line-height: 1.8;
-            box-shadow: var(--shadow-sm);
-        }
+        .bubble { max-width: 75%; padding: 12px 16px; border-radius: var(--radius); line-height: 1.7; font-size: 14px; word-break: break-word; }
+        .message.user .bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+        .message.assistant .bubble { background: var(--bg-secondary); border: 1px solid var(--border-light); border-bottom-left-radius: 4px; }
+        .message.assistant .bubble h1 { font-size: 20px; margin: 12px 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--border-light); }
+        .message.assistant .bubble h2 { font-size: 16px; margin: 12px 0 6px; color: var(--accent); }
+        .message.assistant .bubble h3 { font-size: 14px; margin: 8px 0 4px; }
+        .message.assistant .bubble ul, .message.assistant .bubble ol { padding-left: 20px; margin: 4px 0; }
+        .message.assistant .bubble li { margin: 2px 0; }
+        .message.assistant .bubble strong { color: var(--accent); }
+        .message.assistant .bubble blockquote { border-left: 3px solid var(--accent); padding: 4px 12px; margin: 8px 0; background: var(--accent-light); border-radius: 0 6px 6px 0; }
+        .message.assistant .bubble hr { border: none; border-top: 1px solid var(--border-light); margin: 12px 0; }
+        .message.assistant .bubble code { background: rgba(91,106,191,0.08); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+        .message.assistant .bubble pre { background: #1a1a2e; color: #e9ecef; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
+        .message.assistant .bubble pre code { background: none; padding: 0; color: inherit; }
 
-        /* Markdown 渲染样式 */
-        .bubble h1 { font-size: 20px; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--border); }
-        .bubble h2 { font-size: 17px; margin: 14px 0 6px; color: var(--accent); }
-        .bubble h3 { font-size: 15px; margin: 10px 0 4px; }
-        .bubble h4 { font-size: 14px; margin: 8px 0 4px; }
-        .bubble p { margin: 6px 0; }
-        .bubble ul, .bubble ol { margin: 6px 0; padding-left: 20px; }
-        .bubble li { margin: 3px 0; }
-        .bubble strong { color: var(--accent); }
-        .bubble em { color: var(--text-secondary); }
-        .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
-        .bubble code {
-            background: var(--bg-tertiary);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-family: 'Menlo', 'Consolas', monospace;
-        }
-        .bubble pre {
-            background: var(--bg-tertiary);
-            padding: 12px;
-            border-radius: var(--radius-sm);
-            overflow-x: auto;
-            margin: 8px 0;
-        }
-        .bubble pre code { background: none; padding: 0; }
-        .bubble blockquote {
-            border-left: 3px solid var(--accent);
-            padding-left: 12px;
-            color: var(--text-secondary);
-            margin: 8px 0;
-        }
-
-        /* 加载动画 */
-        .typing-indicator {
-            display: flex;
-            gap: 4px;
-            padding: 4px 0;
-        }
-        .typing-indicator span {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            animation: typing 1.2s infinite;
-        }
+        .typing-indicator { display: flex; gap: 4px; padding: 4px 0; }
+        .typing-indicator span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: typing 1.4s infinite; }
         .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
         .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing { 0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
+        @keyframes typing { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
 
-        /* 输入区 */
-        .input-area {
-            padding: 16px 24px;
-            border-top: 1px solid var(--border);
-            background: var(--bg-secondary);
-        }
-        .input-row {
-            display: flex;
-            gap: 8px;
-            align-items: flex-end;
-        }
-        .input-row textarea {
-            flex: 1;
-            padding: 10px 14px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            font-size: 14px;
-            resize: none;
-            outline: none;
-            font-family: inherit;
-            line-height: 1.5;
-            min-height: 42px;
-            max-height: 120px;
-            transition: border-color 0.2s;
-        }
-        .input-row textarea:focus { border-color: var(--accent); }
-        .input-row textarea::placeholder { color: var(--text-muted); }
-
-        .send-btn {
-            width: 42px; height: 42px;
-            border: none;
-            border-radius: var(--radius-sm);
-            background: var(--accent);
-            color: white;
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            transition: background 0.2s;
-            flex-shrink: 0;
-        }
+        /* Input */
+        .input-area { padding: 12px 20px 16px; border-top: 1px solid var(--border-light); background: var(--bg-secondary); }
+        .input-row { display: flex; gap: 8px; align-items: flex-end; }
+        textarea { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: none; outline: none; font-family: inherit; transition: border-color 0.2s; line-height: 1.5; max-height: 120px; }
+        textarea:focus { border-color: var(--accent); }
+        .send-btn { width: 40px; height: 40px; border: none; border-radius: var(--radius-sm); background: var(--accent); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
         .send-btn:hover { background: var(--accent-hover); }
         .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .send-btn svg { width: 20px; height: 20px; }
+        .send-btn svg { width: 18px; height: 18px; }
 
-        .quick-actions {
-            display: flex;
-            gap: 6px;
-            margin-top: 8px;
-            flex-wrap: wrap;
-        }
-        .quick-btn {
-            padding: 5px 12px;
-            border: 1px solid var(--border);
-            border-radius: 99px;
-            font-size: 12px;
-            background: var(--bg-primary);
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
-
-        /* 空状态 */
-        .empty-state {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-muted);
-            gap: 12px;
-        }
+        /* Empty state */
+        .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); gap: 12px; }
         .empty-state .icon { font-size: 48px; }
         .empty-state .hint { font-size: 14px; }
         .empty-state .sub-hint { font-size: 12px; }
 
-        /* 响应式 */
-        @media (max-width: 768px) {
-            .sidebar { display: none; }
-        }
+        /* Responsive */
+        @media (max-width: 768px) { .sidebar { display: none; } }
     </style>
 </head>
 <body>
@@ -490,12 +213,18 @@
         <span class="topbar-title" id="topbarTitle">教思 AI 教学助手</span>
         <span class="topbar-badge" id="statusBadge">就绪</span>
     </div>
+
+    <!-- 功能选择器 -->
+    <div class="mode-selector" id="modeSelector">
+        <!-- 由 JS 动态生成 -->
+    </div>
+
     <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
 
     <div class="messages" id="messagesArea">
         <div class="empty-state" id="emptyState">
             <div class="icon">📚</div>
-            <div class="hint">设置备课参数，输入课题即可一键生成教案</div>
+            <div class="hint">选择功能模式，设置备课参数，输入课题即可开始</div>
             <div class="sub-hint">所有参数均支持选择或自定义输入</div>
         </div>
     </div>
@@ -507,10 +236,6 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             </button>
         </div>
-        <div class="quick-actions">
-            <button class="quick-btn" onclick="quickAction('备课')">📝 一键备课</button>
-            <button class="quick-btn" onclick="quickAction('闲聊')">💬 自由对话</button>
-        </div>
     </div>
 </div>
 
@@ -519,12 +244,26 @@
 let sessionId = 'sess-' + Date.now();
 let isStreaming = false;
 let configLoaded = false;
+let currentMode = 'lesson_prep';  // 当前功能模式
 const TEACHER_CONFIG_KEY = 'jiaosi_teacher_config';
+const MODE_CONFIG_KEY = 'jiaosi_mode';
+
+// 功能模式定义（从 API 加载后更新）
+let MODES = [
+    { id: 'lesson_prep', name: '教案生成', icon: '📋', desc: '生成完整结构化教案' },
+    { id: 'classroom_sim', name: '课堂预演', icon: '🎭', desc: '预判课堂意外情境与应对' },
+    { id: 'blind_spot', name: '盲区检测', icon: '🔍', desc: '发现教案中的逻辑漏洞' },
+    { id: 'student_sim', name: '学情推演', icon: '👥', desc: '模拟不同学生的思维路径' },
+    { id: 'interaction_design', name: '互动设计', icon: '💬', desc: '设计师生互动方案和话术' },
+    { id: 'chat', name: '自由对话', icon: '🗨️', desc: '闲聊或提问' },
+];
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', async () => {
     await loadTeacherConfig();
     loadSavedTeacherInfo();
+    loadSavedMode();
+    renderModeSelector();
     setupTextareaAutoResize();
 });
 
@@ -541,6 +280,8 @@ async function loadTeacherConfig() {
             fillSelect('teacherDifficulties', config.difficult_points);
             fillSelect('teacherDuration', config.durations);
             fillSelect('teacherStyle', config.styles);
+            // 更新功能模式
+            if (config.modes) MODES = config.modes;
             configLoaded = true;
         }
     } catch (e) {
@@ -568,17 +309,66 @@ function fillSelect(id, options) {
     });
 }
 
+// ========== 功能选择器 ==========
+function renderModeSelector() {
+    const container = document.getElementById('modeSelector');
+    container.innerHTML = '';
+    MODES.forEach(mode => {
+        const btn = document.createElement('button');
+        btn.className = 'mode-btn' + (mode.id === currentMode ? ' active' : '');
+        btn.dataset.mode = mode.id;
+        btn.title = mode.desc;
+        btn.innerHTML = `<span class="mode-icon">${mode.icon}</span>${mode.name}`;
+        btn.onclick = () => selectMode(mode.id);
+        container.appendChild(btn);
+    });
+    updateInputPlaceholder();
+}
+
+function selectMode(modeId) {
+    currentMode = modeId;
+    localStorage.setItem(MODE_CONFIG_KEY, modeId);
+    // 更新按钮状态
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === modeId);
+    });
+    updateInputPlaceholder();
+}
+
+function loadSavedMode() {
+    const saved = localStorage.getItem(MODE_CONFIG_KEY);
+    if (saved && MODES.find(m => m.id === saved)) {
+        currentMode = saved;
+    }
+}
+
+function updateInputPlaceholder() {
+    const input = document.getElementById('userInput');
+    const subject = getComboValue('subject');
+    if (currentMode === 'chat') {
+        input.placeholder = '输入你想聊的话题...';
+    } else {
+        const modeInfo = MODES.find(m => m.id === currentMode);
+        const action = modeInfo ? modeInfo.desc : '开始';
+        if (subject) {
+            input.placeholder = `输入${subject}课题，如：${getSubjectExample(subject)}`;
+        } else {
+            input.placeholder = `输入课题开始${action}`;
+        }
+    }
+}
+
 // ========== 组合输入：选择 + 自定义切换 ==========
 function toggleCombo(name) {
     const combo = document.getElementById('combo-' + name);
     const btn = combo.querySelector('.toggle-btn');
     const isCustom = combo.classList.toggle('custom-mode');
     btn.classList.toggle('active', isCustom);
-    // 如果从自定义切回选择，清空自定义输入
     if (!isCustom) {
         const customInput = combo.querySelector('.custom-input input');
         if (customInput) customInput.value = '';
     }
+    updateInputPlaceholder();
 }
 
 function getComboValue(name) {
@@ -597,7 +387,6 @@ function setComboValue(name, value) {
     const sel = combo.querySelector('.select-input select');
     const customInput = combo.querySelector('.custom-input input');
     if (!value) return;
-    // 先尝试设置 select
     if (sel) {
         const opt = Array.from(sel.options).find(o => o.value === value);
         if (opt) {
@@ -605,7 +394,6 @@ function setComboValue(name, value) {
             return;
         }
     }
-    // 不在预设选项中，切换到自定义模式
     combo.classList.add('custom-mode');
     combo.querySelector('.toggle-btn').classList.add('active');
     if (customInput) customInput.value = value;
@@ -720,27 +508,27 @@ async function sendMessage() {
     const text = input.value.trim();
     if (!text) return;
 
-    // 保存教师信息
     saveTeacherInfo();
 
-    // 显示用户消息
     addMessage('user', text);
     input.value = '';
     input.style.height = 'auto';
 
-    // 构建 stream_input：将教师信息作为 state 字段传入
     const teacherInfo = getTeacherInfo();
 
     isStreaming = true;
     document.getElementById('sendBtn').disabled = true;
-    setStatus('生成中...');
+
+    // 根据模式设置状态文字
+    const modeInfo = MODES.find(m => m.id === currentMode);
+    setStatus(modeInfo ? `${modeInfo.name}中...` : '生成中...');
     setProgress(5, true);
 
     const bubble = createStreamingMessage();
     let fullText = '';
 
     try {
-        await sendStreamRequest(text, teacherInfo, bubble, (chunk) => {
+        await sendStreamRequest(text, teacherInfo, currentMode, bubble, (chunk) => {
             fullText += chunk;
             bubble.innerHTML = renderMarkdown(fullText);
             document.getElementById('messagesArea').scrollTop = document.getElementById('messagesArea').scrollHeight;
@@ -757,21 +545,15 @@ async function sendMessage() {
     }
 }
 
-async function sendStreamRequest(userText, teacherInfo, bubble, onChunk) {
+async function sendStreamRequest(userText, teacherInfo, mode, bubble, onChunk) {
     const payload = {
         model: 'vibe-coding',
         messages: [{ role: 'user', content: userText }],
         stream: true,
         session_id: sessionId,
-        // 将教师信息放入 extra_body，供后端解析
         extra_body: {
-            lesson_subject: teacherInfo.lesson_subject,
-            lesson_grade: teacherInfo.lesson_grade,
-            lesson_objectives: teacherInfo.lesson_objectives,
-            key_points: teacherInfo.key_points,
-            difficult_points: teacherInfo.difficult_points,
-            lesson_duration: teacherInfo.lesson_duration,
-            style_preference: teacherInfo.style_preference,
+            ...teacherInfo,
+            mode: mode,   // 功能模式由前端显式传入
         }
     };
 
@@ -799,9 +581,7 @@ async function sendStreamRequest(userText, teacherInfo, bubble, onChunk) {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-            // 处理自定义 SSE 事件（节点进度）
             if (line.startsWith('event: node_progress')) {
-                // 下一行是 data
                 continue;
             }
             if (line.startsWith('data: ') && line.length > 6) {
@@ -811,7 +591,6 @@ async function sendStreamRequest(userText, teacherInfo, bubble, onChunk) {
                 try {
                     const evt = JSON.parse(dataStr);
                     if (evt.node && evt.status) {
-                        // 更新进度
                         if (evt.progress_id === 'intent') progressPercent = 15;
                         else if (evt.progress_id === 'generating') progressPercent = 40;
                         else if (evt.progress_id === 'formatting') progressPercent = 85;
@@ -828,12 +607,8 @@ async function sendStreamRequest(userText, teacherInfo, bubble, onChunk) {
                         if (delta && delta.content) {
                             onChunk(delta.content);
                         }
-                        if (chunk.choices[0].finish_reason === 'stop') {
-                            // 完成
-                        }
                     }
                 } catch (e) {
-                    // 可能是 [DONE]
                     if (dataStr.trim() === '[DONE]') break;
                 }
             }
@@ -845,22 +620,6 @@ function handleKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
-    }
-}
-
-// ========== 快捷操作 ==========
-function quickAction(type) {
-    const subject = getComboValue('subject');
-    const input = document.getElementById('userInput');
-
-    if (type === '备课') {
-        input.placeholder = subject
-            ? `输入${subject}课题，如：${getSubjectExample(subject)}`
-            : '输入课题名称';
-        input.focus();
-    } else {
-        input.placeholder = '输入你想聊的话题...';
-        input.focus();
     }
 }
 
@@ -878,7 +637,7 @@ function newChat() {
     const area = document.getElementById('messagesArea');
     area.innerHTML = `<div class="empty-state" id="emptyState">
         <div class="icon">📚</div>
-        <div class="hint">设置备课参数，输入课题即可一键生成教案</div>
+        <div class="hint">选择功能模式，设置备课参数，输入课题即可开始</div>
         <div class="sub-hint">所有参数均支持选择或自定义输入</div>
     </div>`;
     setProgress(0);

@@ -1,7 +1,7 @@
 ## 项目概述
 - **名称**: vibe-coding
 - **类型**: Web 服务（FastAPI HTTP 服务 + 前端页面）
-- **描述**: 智能备课助手，提供参数化教案生成与闲聊能力
+- **描述**: 教思 AI 教学助手——课堂沙盘推演器，提供教案生成、课堂预演、盲区检测、学情推演、互动设计等「替老师思考」能力
 
 ## 技术栈
 - **语言**: Python 3.12
@@ -51,14 +51,29 @@
 
 ## 架构设计
 
-### 3 节点流水线（重构后）
+### 3 节点流水线 + 多模式路由
 ```
 intent_router → [chat] → chat_reply → format_output
-              → [lesson_prep] → generate_lesson_plan → format_output
+             → [lesson_prep] → generate_lesson_plan → format_output
+             → [classroom_sim] → simulate_classroom → format_output
+             → [blind_spot] → detect_blindspots → format_output
+             → [student_sim] → simulate_student_profiles → format_output
+             → [interaction_design] → design_interactions → format_output
 ```
-- **intent_router**: 关键词匹配，区分闲聊/备课
-- **generate_lesson_plan**: 单次 LLM 调用生成完整教案 JSON，替代原 9 节点串行
-- **format_output**: 纯 Python，JSON→Markdown 格式化输出
+- **intent_router**: 根据 `mode` 字段路由到对应功能节点，`mode` 由前端显式传入
+- **各功能节点**: 独立 prompt + 单次 LLM 调用，各节点互不依赖（为后续 subagent 并行扩展预留）
+- **format_output**: 按 `mode` 选择不同格式化模板，统一 Markdown 输出
+- **State 预留 `modes` 列表字段**：为后续 subagent 模式（多功能并行）预留，当前单功能模式下 `modes = [mode]`
+
+### 功能模式
+| mode | 节点 | 描述 |
+|------|------|------|
+| `lesson_prep` | generate_lesson_plan | 生成完整结构化教案 |
+| `classroom_sim` | simulate_classroom | 预判课堂意外情境与应对策略 |
+| `blind_spot` | detect_blindspots | 发现教案中的逻辑漏洞与认知跳步 |
+| `student_sim` | simulate_student_profiles | 模拟优/中/困三层学生思维路径 |
+| `interaction_design` | design_interactions | 设计师生互动方案和话术 |
+| `chat` | chat_reply | 自由对话 |
 
 ### 流式输出架构
 - 使用 `stream_mode=["messages", "updates"]` 双模式消费 LangGraph 流
@@ -69,8 +84,9 @@ intent_router → [chat] → chat_reply → format_output
 ### 前端参数化输入
 - 左侧面板：7 个核心参数（学科、年级、教学目标、重点、难点、课时时长、教学风格）
 - 每个参数支持「下拉选择 + 自定义输入」两种模式，点击切换按钮即可切换
-- 底部任务选择：备课模式/闲聊模式一键切换
-- 备课模式下输入框变为"课题"输入，无需手写提示词
+- 顶部功能选择器：6 种功能模式一键切换（教案生成/课堂预演/盲区检测/学情推演/互动设计/自由对话）
+- 功能模式通过 `extra_body.mode` 显式传入后端，后端根据 mode 路由
+- 各功能模式下输入框变为"课题"输入，无需手写提示词
 
 ### LLM 参数配置
 - `precise` (temp=0.3): 解析、校验等精确任务
@@ -90,6 +106,8 @@ intent_router → [chat] → chat_reply → format_output
 3. `project_type` 和 `preview_enable` 必须在根和子项目 `.coze` 中保持一致
 4. **cozeloop 兼容性**：LangChain 1.0 移除了 `langchain.callbacks` 模块，需要 `cozeloop >= 0.1.28` 才能兼容
 5. **http_run.sh 幂等性**：脚本启动前会 `fuser -k` 清理端口残留进程，确保重复执行不会冲突
-6. **闲聊场景 format_output**：`node_format_output` 在 `intent != "lesson_prep"` 时直接透传 `chat_reply` 的消息，不生成空教案模板
+6. **闲聊场景 format_output**：`node_format_output` 在 `mode == "chat"` 时直接透传 `chat_reply` 的消息，不生成其他模板
+7. **mode 路由**：功能模式由前端 `extra_body.mode` 显式传入，`intent_router` 直接读取 `state.mode` 做路由，不依赖关键词猜测
+8. **subagent 扩展预留**：State 中预留 `modes: list[str]` 字段，当前单功能模式下 `modes = [mode]`，后续 subagent 模式可传入多个 mode 并行执行
 7. **教师信息注入**：前端通过 `extra_body` 传递备课参数（学科/年级/教学目标/重点/难点/课时时长/教学风格），后端在 `stream_input` 中注入，`generate_lesson_plan` 节点从 state 中读取并嵌入 prompt
 8. **教案生成耗时**：单次 LLM 调用约 10-30 秒完成完整教案，远快于原 11 节点串行方案的 2-5 分钟
