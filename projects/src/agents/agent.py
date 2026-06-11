@@ -24,6 +24,8 @@ from coze_coding_utils.runtime_ctx.context import default_headers
 from coze_coding_utils.log.write_log import request_context
 from coze_coding_utils.runtime_ctx.context import new_context
 from storage.memory.memory_saver import get_memory_saver
+from config.llm_config import get_llm_params, Thresholds
+from utils.json_parser import extract_text_from_response
 
 LLM_CONFIG = "config/agent_llm_config.json"
 
@@ -109,19 +111,8 @@ def generate_lesson_plan(subject: str, topic: str, grade: str, lesson_hours: int
         HumanMessage(content=user_content)
     ]
     
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.7,
-        max_completion_tokens=8000,
-        thinking="disabled"
-    )
-    
-    if isinstance(response.content, str):
-        return response.content
-    elif isinstance(response.content, list):
-        return " ".join(item.get("text", "") for item in response.content if isinstance(item, dict))
-    return str(response.content)
+    response = client.invoke(messages=messages, **get_llm_params("generate_lesson_plan"))
+    return extract_text_from_response(response)
 
 
 @tool
@@ -190,19 +181,8 @@ def analyze_learning_situation(grade: str, subject: str = "", data_description: 
         HumanMessage(content=user_content)
     ]
     
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.6,
-        max_completion_tokens=6000,
-        thinking="disabled"
-    )
-    
-    if isinstance(response.content, str):
-        return response.content
-    elif isinstance(response.content, list):
-        return " ".join(item.get("text", "") for item in response.content if isinstance(item, dict))
-    return str(response.content)
+    response = client.invoke(messages=messages, **get_llm_params("analyze_learning_situation"))
+    return extract_text_from_response(response)
 
 
 @tool
@@ -271,19 +251,8 @@ def simulate_teaching(lesson_plan: str, grade: str = "", focus_stage: str = "全
         HumanMessage(content=user_content)
     ]
     
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.7,
-        max_completion_tokens=10000,
-        thinking="disabled"
-    )
-    
-    if isinstance(response.content, str):
-        return response.content
-    elif isinstance(response.content, list):
-        return " ".join(item.get("text", "") for item in response.content if isinstance(item, dict))
-    return str(response.content)
+    response = client.invoke(messages=messages, **get_llm_params("simulate_teaching"))
+    return extract_text_from_response(response)
 
 
 @tool
@@ -349,19 +318,8 @@ def classroom_assistant(scenario: str, current_topic: str = "",
         HumanMessage(content=user_content)
     ]
     
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-lite-260215",
-        temperature=0.8,
-        max_completion_tokens=2000,
-        thinking="disabled"
-    )
-    
-    if isinstance(response.content, str):
-        return response.content
-    elif isinstance(response.content, list):
-        return " ".join(item.get("text", "") for item in response.content if isinstance(item, dict))
-    return str(response.content)
+    response = client.invoke(messages=messages, **get_llm_params("classroom_assistant"))
+    return extract_text_from_response(response)
 
 
 @tool
@@ -426,19 +384,8 @@ def generate_growth_report(teacher_subject: str = "", time_period: str = "最近
         HumanMessage(content=user_content)
     ]
     
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.7,
-        max_completion_tokens=6000,
-        thinking="disabled"
-    )
-    
-    if isinstance(response.content, str):
-        return response.content
-    elif isinstance(response.content, list):
-        return " ".join(item.get("text", "") for item in response.content if isinstance(item, dict))
-    return str(response.content)
+    response = client.invoke(messages=messages, **get_llm_params("generate_growth_report"))
+    return extract_text_from_response(response)
 
 
 def build_agent(ctx=None):

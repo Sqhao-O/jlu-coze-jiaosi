@@ -23,6 +23,8 @@ from graphs.state import (
     TeachingState, SimulationState, WorkflowMode,
     RiskLevel, StudentTier,
 )
+from config.llm_config import get_llm_params, Thresholds
+from utils.json_parser import parse_json, extract_text_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -31,27 +33,6 @@ logger = logging.getLogger(__name__)
 # 辅助函数
 # ============================================================
 
-def _extract_text(response) -> str:
-    """从LLM响应中提取文本"""
-    if isinstance(response.content, str):
-        return response.content
-    elif isinstance(response.content, list):
-        return " ".join(item.get("text", "") for item in response.content if isinstance(item, dict))
-    return str(response.content)
-
-
-def _parse_json(content: str, default: dict = None) -> dict:
-    """安全解析JSON"""
-    content = str(content).strip()
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[推演] JSON解析失败: {content[:200]}")
-        return default or {}
 
 
 # ============================================================
@@ -72,7 +53,7 @@ def node_parse_lesson_plan(state: SimulationState) -> dict:
     lesson_plan = state.get("source_lesson_plan", "") or state.get("lesson_plan_draft", "")
 
     # 教案可用性检查
-    if not lesson_plan or len(lesson_plan) < 200:
+    if not lesson_plan or len(lesson_plan) < Thresholds.MIN_LESSON_PLAN_LENGTH:
         logger.warning(f"[推演-节点1] 教案不可用 (长度={len(lesson_plan) if lesson_plan else 0})")
         return {
             "last_action": "教案不可用 - 需要先生成教案",
@@ -114,19 +95,13 @@ def node_parse_lesson_plan(state: SimulationState) -> dict:
         HumanMessage(content=f"请解析以下教案:\n\n{lesson_plan[:5000]}")
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-lite-260215",
-        temperature=0.3,
-        max_completion_tokens=3000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("parse_lesson_plan"))
 
-    parsed = _parse_json(_extract_text(response), {"stages": [], "total_stages": 0})
+    parsed = parse_json(response, default={"stages": [], "total_stages": 0}, log_context="[推演-节点1]")
 
     stages = parsed.get("stages", [])
     # 推演范围控制: 超过5个环节聚焦前5个(核心环节)
-    if len(stages) > 5:
+    if len(stages) > Thresholds.MAX_SIMULATION_STAGES:
         logger.info(f"[推演-节点1] 环节数={len(stages)}, 聚焦前5个核心环节")
         stages = stages[:5]
 
@@ -135,6 +110,14 @@ def node_parse_lesson_plan(state: SimulationState) -> dict:
         "stages": stages,
         "total_stages": len(stages),
         "last_action": f"教案解析完成 - 识别{len(stages)}个教学环节",
+        "intermediate_data": {
+            "parse_lesson_plan": {
+                "lesson_overview": parsed.get("lesson_overview", ""),
+                "stages": stages,
+                "total_stages": len(stages),
+                "key_dependencies": parsed.get("key_dependencies", []),
+            }
+        },
     }
 
 
@@ -204,20 +187,20 @@ def node_build_virtual_classroom(state: SimulationState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.7,
-        max_completion_tokens=3000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("build_virtual_classroom"))
 
-    students = _parse_json(_extract_text(response), {"student_a": {}, "student_b": {}, "student_c": {}})
+    students = parse_json(response, default={"student_a": {}, "student_b": {}, "student_c": {}}, log_context="[推演-节点2]")
 
     return {
         "virtual_students": students,
         "class_atmosphere": students.get("class_atmosphere", ""),
         "last_action": "虚拟课堂构建完成 - 3个层次学生角色已就位",
+        "intermediate_data": {
+            "build_virtual_classroom": {
+                "virtual_students": students,
+                "class_atmosphere": students.get("class_atmosphere", ""),
+            }
+        },
     }
 
 
@@ -330,15 +313,9 @@ def node_student_simulator(state: dict) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-lite-260215",  # lite模型 - 快速响应
-        temperature=0.8,  # 稍高温度增加多样性
-        max_completion_tokens=800,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("student_simulator"))
 
-    result = _parse_json(_extract_text(response), {
+    result = parse_json(response, default={
         "attention": "正在听讲",
         "understanding_level": 5,
         "inner_monologue": "老师在讲什么呢...",
@@ -346,7 +323,7 @@ def node_student_simulator(state: dict) -> dict:
         "if_called_answer": "嗯...我不太确定",
         "confusion_points": [],
         "engagement_score": 5,
-    })
+    }, log_context="[推演-模拟]")
 
     return {
         "student_simulations": [{
@@ -354,7 +331,15 @@ def node_student_simulator(state: dict) -> dict:
             "student_tier": student_tier,
             "student_key": state.get("student_key", ""),
             "result": result,
-        }]
+        }],
+        "intermediate_data": {
+            "student_simulator": {
+                "stage_name": stage_name,
+                "student_tier": student_tier,
+                "student_key": state.get("student_key", ""),
+                "result": result,
+            }
+        },
     }
 
 
@@ -398,6 +383,12 @@ def node_aggregate_results(state: SimulationState) -> dict:
     return {
         "aggregated_results": aggregated,
         "last_action": f"三路模拟结果聚合完成 - {len(aggregated)}个环节",
+        "intermediate_data": {
+            "aggregate_results": {
+                "aggregated_results": aggregated,
+                "total_stages": len(aggregated),
+            }
+        },
     }
 
 
@@ -452,15 +443,9 @@ def node_bottleneck_detection(state: SimulationState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=3000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("bottleneck_detection"))
 
-    result = _parse_json(_extract_text(response), {"bottlenecks": [], "overall_assessment": ""})
+    result = parse_json(response, default={"bottlenecks": [], "overall_assessment": ""}, log_context="[推演-节点7]")
 
     bottlenecks = result.get("bottlenecks", [])
     logger.info(f"[推演-节点7] 识别到{len(bottlenecks)}个瓶颈")
@@ -469,6 +454,12 @@ def node_bottleneck_detection(state: SimulationState) -> dict:
         "bottleneck_list": bottlenecks,
         "overall_assessment": result.get("overall_assessment", ""),
         "last_action": f"瓶颈识别完成 - 发现{len(bottlenecks)}个潜在问题",
+        "intermediate_data": {
+            "bottleneck_detection": {
+                "bottlenecks": bottlenecks,
+                "overall_assessment": result.get("overall_assessment", ""),
+            }
+        },
     }
 
 
@@ -499,10 +490,10 @@ def node_risk_assessment(state: SimulationState) -> dict:
         stage_name = bn.get("stage_name", "")
 
         # 风险评级逻辑
-        if severity == "high" or len(affected) >= 2:
+        if severity == "high" or len(affected) >= Thresholds.HIGH_RISK_AFFECTED_TIERS:
             risk_level = RiskLevel.RED
             high_count += 1
-        elif severity == "medium" or len(affected) >= 1:
+        elif severity == "medium" or len(affected) >= Thresholds.MEDIUM_RISK_AFFECTED_TIERS:
             risk_level = RiskLevel.YELLOW
             medium_count += 1
         else:
@@ -536,6 +527,9 @@ def node_risk_assessment(state: SimulationState) -> dict:
     return {
         "risk_assessment": risk_assessment,
         "last_action": f"风险评级完成 - {risk_assessment['summary']}",
+        "intermediate_data": {
+            "risk_assessment": risk_assessment,
+        },
     }
 
 
@@ -592,15 +586,9 @@ def node_contingency_plans(state: SimulationState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.6,
-        max_completion_tokens=3000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("contingency_plans"))
 
-    result = _parse_json(_extract_text(response), {"plans": []})
+    result = parse_json(response, default={"plans": []}, log_context="[推演-节点9]")
     plans = result.get("plans", [])
 
     logger.info(f"[推演-节点9] 生成了{len(plans)}条应急预案")
@@ -608,6 +596,12 @@ def node_contingency_plans(state: SimulationState) -> dict:
     return {
         "contingency_plans": plans,
         "last_action": f"应急预案生成完成 - {len(plans)}条方案",
+        "intermediate_data": {
+            "contingency_plans": {
+                "plans": plans,
+                "total_plans": len(plans),
+            }
+        },
     }
 
 
@@ -677,19 +671,19 @@ def node_optimization_suggestions(state: SimulationState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=4000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("optimization_suggestions"))
 
-    suggestions = _parse_json(_extract_text(response), {"changes": [], "summary": ""})
+    suggestions = parse_json(response, default={"changes": [], "summary": ""}, log_context="[推演-节点10]")
 
     return {
         "optimization_suggestions": suggestions,
         "last_action": f"优化建议生成完成 - {len(suggestions.get('changes', []))}处改动",
+        "intermediate_data": {
+            "optimization_suggestions": {
+                "suggestions": suggestions,
+                "total_changes": len(suggestions.get("changes", [])),
+            }
+        },
     }
 
 
@@ -748,19 +742,18 @@ def node_comparison_report(state: SimulationState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=3000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("comparison_report"))
 
-    report = _extract_text(response)
+    report = extract_text_from_response(response)
 
     return {
         "comparison_report": report,
         "last_action": "方案对比报告生成完成",
+        "intermediate_data": {
+            "comparison_report": {
+                "report": report,
+            }
+        },
     }
 
 

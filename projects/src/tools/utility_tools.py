@@ -15,6 +15,9 @@ from typing import Optional, Dict, Any, List
 from coze_coding_utils.runtime_ctx.context import new_context
 from coze_coding_utils.log.write_log import request_context
 
+from config.llm_config import get_llm_params, Thresholds
+from utils.json_parser import extract_text_from_response
+
 
 # ============================================================
 # 提示词管理
@@ -238,7 +241,7 @@ def merge_kb_results(results: Dict[str, str], max_length: int = 3000) -> str:
 # 会话变量管理
 # ============================================================
 
-def compress_lesson_plan(plan_text: str, max_length: int = 500) -> str:
+def compress_lesson_plan(plan_text: str, max_length: int = None) -> str:
     """
     压缩教案文本为摘要 (用于State存储)
 
@@ -247,12 +250,15 @@ def compress_lesson_plan(plan_text: str, max_length: int = 500) -> str:
 
     Args:
         plan_text: 教案全文
-        max_length: 摘要最大长度
+        max_length: 摘要最大长度（默认使用 Thresholds.LESSON_PLAN_COMPRESS_TARGET）
 
     Returns:
         压缩后的摘要或原文
     """
-    if len(plan_text) <= 2000:
+    if max_length is None:
+        max_length = Thresholds.LESSON_PLAN_COMPRESS_TARGET
+
+    if len(plan_text) <= Thresholds.LESSON_PLAN_COMPRESS_THRESHOLD:
         return plan_text
 
     ctx = request_context.get() or new_context(method="compress")
@@ -263,20 +269,19 @@ def compress_lesson_plan(plan_text: str, max_length: int = 500) -> str:
 
         client = LLMClient(ctx=ctx)
 
+        # 使用集中化 LLM 配置
+        llm_params = get_llm_params("compress_lesson_plan",
+                                     max_tokens=max_length * 3)
         response = client.invoke(
             messages=[
                 SystemMessage(content="请将以下教案压缩为简洁摘要，保留课题、教学目标、重难点、核心教学环节的关键信息。控制在500字以内。"),
                 HumanMessage(content=plan_text[:8000])  # 只取前8000字用于摘要
             ],
-            model="doubao-seed-2-0-lite-260215",
-            temperature=0.3,
-            max_completion_tokens=max_length * 3,
-            thinking="disabled"
+            **llm_params
         )
 
-        if isinstance(response.content, str):
-            return response.content[:max_length]
-        return plan_text[:max_length]
+        text = extract_text_from_response(response)
+        return text[:max_length] if text else plan_text[:max_length]
 
     except Exception:
         # 压缩失败时直接截断

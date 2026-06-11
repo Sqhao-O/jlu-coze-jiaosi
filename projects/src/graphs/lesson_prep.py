@@ -24,6 +24,9 @@ from graphs.state import (
     TeachingState, LessonPrepState, WorkflowMode, StudentTier,
 )
 
+from config.llm_config import get_llm_params, Thresholds
+from utils.json_parser import parse_json, extract_text_from_response
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,30 +80,9 @@ def node_parse_requirements(state: LessonPrepState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-lite-260215",
-        temperature=0.3,
-        max_completion_tokens=1000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("parse_requirements"))
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
-
-    # 清理可能的 markdown 代码块标记
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点1] JSON解析失败, 使用默认值: {content[:200]}")
-        parsed = {}
+    parsed = parse_json(response, default={}, log_context="[备课-节点1]")
 
     return {
         "lesson_subject": parsed.get("subject", state.get("subject", "未指定")),
@@ -112,6 +94,17 @@ def node_parse_requirements(state: LessonPrepState) -> dict:
         "workflow_mode": WorkflowMode.LESSON_PREP,
         "last_action": "解析备课需求",
         "error_count": 0,
+        "intermediate_data": {
+            "parse_requirements": {
+                "parsed_result": parsed,
+                "lesson_subject": parsed.get("subject", state.get("subject", "未指定")),
+                "lesson_topic": parsed.get("topic", topic),
+                "lesson_grade": parsed.get("grade", state.get("grade_level", "未指定")),
+                "lesson_hours": parsed.get("lesson_hours", state.get("lesson_hours", 1)),
+                "lesson_type": parsed.get("lesson_type", "新授课"),
+                "style_preference": parsed.get("style_preference", state.get("style_description", "混合型")),
+            }
+        },
     }
 
 
@@ -170,18 +163,9 @@ def node_kb_retrieval(state: LessonPrepState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=3000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("kb_retrieval"))
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    kb_context = str(content)
+    kb_context = extract_text_from_response(response)
 
     return {
         "kb_context": kb_context,
@@ -192,6 +176,17 @@ def node_kb_retrieval(state: LessonPrepState) -> dict:
             "personal": "已检索个人知识库",
         },
         "last_action": "知识库检索完成",
+        "intermediate_data": {
+            "kb_retrieval": {
+                "kb_context": kb_context,
+                "kb_results": {
+                    "standards": "已检索课程标准",
+                    "textbooks": "已检索教材教参",
+                    "pedagogy": "已检索教学法",
+                    "personal": "已检索个人知识库",
+                },
+            }
+        },
     }
 
 
@@ -229,37 +224,19 @@ def node_style_modeling(state: LessonPrepState) -> dict:
         HumanMessage(content=f"请为偏好'{style_pref}'的教师生成风格向量。")
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-lite-260215",
-        temperature=0.4,
-        max_completion_tokens=1000,
-        thinking="disabled"
-    )
+    default_style = {
+        "compactness": 0.6,
+        "interactivity": 0.7,
+        "depth": 0.6,
+        "interest": 0.5,
+        "rigor": 0.7,
+        "innovation": 0.4,
+        "warmth": 0.6,
+    }
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
+    response = client.invoke(messages=messages, **get_llm_params("style_modeling"))
 
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        style_profile = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点3] JSON解析失败, 使用默认风格")
-        style_profile = {
-            "compactness": 0.6,
-            "interactivity": 0.7,
-            "depth": 0.6,
-            "interest": 0.5,
-            "rigor": 0.7,
-            "innovation": 0.4,
-            "warmth": 0.6,
-        }
+    style_profile = parse_json(response, default=default_style, log_context="[备课-节点3]")
 
     # 生成风格描述
     style_desc_map = {
@@ -283,6 +260,12 @@ def node_style_modeling(state: LessonPrepState) -> dict:
         },
         "style_description": style_desc_map.get(style_pref, "灵活综合型教学风格"),
         "last_action": "风格建模完成",
+        "intermediate_data": {
+            "style_modeling": {
+                "style_profile": style_profile,
+                "style_description": style_desc_map.get(style_pref, "灵活综合型教学风格"),
+            }
+        },
     }
 
 
@@ -345,38 +328,25 @@ def node_objectives_generation(state: LessonPrepState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.6,
-        max_completion_tokens=3000,
-        thinking="disabled"
-    )
+    default_objectives = {
+        "basic": {"knowledge": ["理解基本概念"], "skill": ["完成基础练习"], "emotion": ["培养学习兴趣"]},
+        "intermediate": {"knowledge": ["分析关键内容"], "skill": ["运用所学解决问题"], "emotion": ["体会学科价值"]},
+        "advanced": {"knowledge": ["探究深层规律"], "skill": ["设计创新方案"], "emotion": ["形成批判思维"]},
+        "core_literacy_links": ["学科核心素养"]
+    }
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
+    response = client.invoke(messages=messages, **get_llm_params("objectives_generation"))
 
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        objectives = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点4] JSON解析失败")
-        objectives = {
-            "basic": {"knowledge": ["理解基本概念"], "skill": ["完成基础练习"], "emotion": ["培养学习兴趣"]},
-            "intermediate": {"knowledge": ["分析关键内容"], "skill": ["运用所学解决问题"], "emotion": ["体会学科价值"]},
-            "advanced": {"knowledge": ["探究深层规律"], "skill": ["设计创新方案"], "emotion": ["形成批判思维"]},
-            "core_literacy_links": ["学科核心素养"]
-        }
+    objectives = parse_json(response, default=default_objectives, log_context="[备课-节点4]")
 
     return {
         "teaching_objectives": objectives,
         "last_action": "三层教学目标生成完成",
+        "intermediate_data": {
+            "objectives_generation": {
+                "objectives": objectives,
+            }
+        },
     }
 
 
@@ -436,37 +406,24 @@ KB上下文:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=2000,
-        thinking="disabled"
-    )
+    default_key_diff = {
+        "key_point": {"content": "核心概念理解", "reason": "学科基础", "strategy": "多角度讲解"},
+        "difficult_points": [{"content": "抽象概念理解", "reason": "认知发展限制", "breakthrough_strategy": "具象化演示+类比", "scaffolding": "提供直观教具和实例"}],
+        "common_misconceptions": ["概念混淆"]
+    }
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
+    response = client.invoke(messages=messages, **get_llm_params("key_difficulty_design"))
 
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        key_difficult = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点5] JSON解析失败")
-        key_difficult = {
-            "key_point": {"content": "核心概念理解", "reason": "学科基础", "strategy": "多角度讲解"},
-            "difficult_points": [{"content": "抽象概念理解", "reason": "认知发展限制", "breakthrough_strategy": "具象化演示+类比", "scaffolding": "提供直观教具和实例"}],
-            "common_misconceptions": ["概念混淆"]
-        }
+    key_difficult = parse_json(response, default=default_key_diff, log_context="[备课-节点5]")
 
     return {
         "key_difficult_points": key_difficult,
         "last_action": "重难点设计完成",
+        "intermediate_data": {
+            "key_difficulty_design": {
+                "key_difficult_points": key_difficult,
+            }
+        },
     }
 
 
@@ -526,39 +483,30 @@ def node_process_design(state: LessonPrepState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.7,
-        max_completion_tokens=4000,
-        thinking="disabled"
-    )
+    default_process = [
+        {"stage": "导入", "duration": 5, "teacher_activity": "创设情境导入", "student_activity": "观察思考", "design_intent": "激发兴趣", "transition": "接下来我们深入探讨...", "tier_notes": {"basic": "确保跟上", "advanced": "可提前思考"}},
+        {"stage": "新授", "duration": 20, "teacher_activity": "分层讲解核心内容", "student_activity": "听讲+互动", "design_intent": "掌握核心知识", "transition": "让我们通过练习巩固...", "tier_notes": {"basic": "多举例说明", "advanced": "引导深度思考"}},
+        {"stage": "练习", "duration": 10, "teacher_activity": "布置分层练习", "student_activity": "独立/小组练习", "design_intent": "巩固应用", "transition": "拓展一下思路...", "tier_notes": {"basic": "完成基础题", "advanced": "挑战变式题"}},
+        {"stage": "拓展", "duration": 5, "teacher_activity": "引导延伸思考", "student_activity": "讨论/探究", "design_intent": "拓展视野", "transition": "我们来回顾今天所学...", "tier_notes": {"basic": "关联生活", "advanced": "探究深层问题"}},
+        {"stage": "总结", "duration": 5, "teacher_activity": "引导归纳总结", "student_activity": "归纳整理", "design_intent": "形成知识结构", "transition": "", "tier_notes": {"basic": "能说出要点", "advanced": "能画出思维导图"}},
+    ]
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
+    response = client.invoke(messages=messages, **get_llm_params("process_design"))
 
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        process = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点6] JSON解析失败, 使用默认结构")
-        process = [
-            {"stage": "导入", "duration": 5, "teacher_activity": "创设情境导入", "student_activity": "观察思考", "design_intent": "激发兴趣", "transition": "接下来我们深入探讨...", "tier_notes": {"basic": "确保跟上", "advanced": "可提前思考"}},
-            {"stage": "新授", "duration": 20, "teacher_activity": "分层讲解核心内容", "student_activity": "听讲+互动", "design_intent": "掌握核心知识", "transition": "让我们通过练习巩固...", "tier_notes": {"basic": "多举例说明", "advanced": "引导深度思考"}},
-            {"stage": "练习", "duration": 10, "teacher_activity": "布置分层练习", "student_activity": "独立/小组练习", "design_intent": "巩固应用", "transition": "拓展一下思路...", "tier_notes": {"basic": "完成基础题", "advanced": "挑战变式题"}},
-            {"stage": "拓展", "duration": 5, "teacher_activity": "引导延伸思考", "student_activity": "讨论/探究", "design_intent": "拓展视野", "transition": "我们来回顾今天所学...", "tier_notes": {"basic": "关联生活", "advanced": "探究深层问题"}},
-            {"stage": "总结", "duration": 5, "teacher_activity": "引导归纳总结", "student_activity": "归纳整理", "design_intent": "形成知识结构", "transition": "", "tier_notes": {"basic": "能说出要点", "advanced": "能画出思维导图"}},
-        ]
+    # process 是 JSON 数组，parse_json 会包装为 {"items": [...]}
+    parsed = parse_json(response, default=default_process, log_context="[备课-节点6]")
+    process = parsed.get("items", parsed) if isinstance(parsed, dict) and "items" in parsed else parsed
+    if not isinstance(process, list):
+        process = default_process
 
     return {
         "teaching_process": process,
         "last_action": "教学过程编排完成",
+        "intermediate_data": {
+            "process_design": {
+                "teaching_process": process,
+            }
+        },
     }
 
 
@@ -612,33 +560,20 @@ def node_board_design(state: LessonPrepState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-lite-260215",
-        temperature=0.5,
-        max_completion_tokens=1500,
-        thinking="disabled"
-    )
+    default_board = {"main_board": f"课题: {topic}\n一、核心概念\n二、关键方法\n三、知识结构", "side_board": "课堂生成区", "layout": "左三分之二主板書, 右三分之一副板书"}
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
+    response = client.invoke(messages=messages, **get_llm_params("board_design"))
 
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        board = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点7] JSON解析失败")
-        board = {"main_board": f"课题: {topic}\n一、核心概念\n二、关键方法\n三、知识结构", "side_board": "课堂生成区", "layout": "左三分之二主板書, 右三分之一副板书"}
+    board = parse_json(response, default=default_board, log_context="[备课-节点7]")
 
     return {
         "board_design": board,
         "last_action": "板书设计完成",
+        "intermediate_data": {
+            "board_design": {
+                "board_design": board,
+            }
+        },
     }
 
 
@@ -693,37 +628,24 @@ def node_tiered_exercises(state: LessonPrepState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.7,
-        max_completion_tokens=2000,
-        thinking="disabled"
-    )
+    default_exercises = {
+        "basic": [{"question": "基础概念回顾", "type": "填空", "answer_hint": "参考教材", "target": "识记"}],
+        "intermediate": [{"question": "综合运用分析", "type": "简答", "answer_hint": "结合所学", "target": "理解应用"}],
+        "advanced": [{"question": "拓展探究思考", "type": "开放题", "answer_hint": "多角度思考", "target": "创新"}],
+    }
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
+    response = client.invoke(messages=messages, **get_llm_params("tiered_exercises"))
 
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        exercises = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点8] JSON解析失败")
-        exercises = {
-            "basic": [{"question": "基础概念回顾", "type": "填空", "answer_hint": "参考教材", "target": "识记"}],
-            "intermediate": [{"question": "综合运用分析", "type": "简答", "answer_hint": "结合所学", "target": "理解应用"}],
-            "advanced": [{"question": "拓展探究思考", "type": "开放题", "answer_hint": "多角度思考", "target": "创新"}],
-        }
+    exercises = parse_json(response, default=default_exercises, log_context="[备课-节点8]")
 
     return {
         "tiered_exercises": exercises,
         "last_action": "分层练习设计完成",
+        "intermediate_data": {
+            "tiered_exercises": {
+                "exercises": exercises,
+            }
+        },
     }
 
 
@@ -779,38 +701,25 @@ def node_homework_design(state: LessonPrepState) -> dict:
         HumanMessage(content=user_content)
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.6,
-        max_completion_tokens=2000,
-        thinking="disabled"
-    )
+    default_homework = {
+        "required": [{"task": "完成教材课后练习", "estimated_time": "15分钟", "purpose": "巩固基础"}],
+        "optional": [{"task": "拓展阅读/练习", "estimated_time": "10分钟", "purpose": "深化理解"}],
+        "challenge": [{"task": "探究小课题", "estimated_time": "灵活", "purpose": "创新拓展"}],
+        "total_time": "25-30分钟(必做+选做)"
+    }
 
-    content = response.content
-    if isinstance(content, list):
-        content = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
-    content = str(content).strip()
+    response = client.invoke(messages=messages, **get_llm_params("homework_design"))
 
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-
-    try:
-        homework = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[备课-节点9] JSON解析失败")
-        homework = {
-            "required": [{"task": "完成教材课后练习", "estimated_time": "15分钟", "purpose": "巩固基础"}],
-            "optional": [{"task": "拓展阅读/练习", "estimated_time": "10分钟", "purpose": "深化理解"}],
-            "challenge": [{"task": "探究小课题", "estimated_time": "灵活", "purpose": "创新拓展"}],
-            "total_time": "25-30分钟(必做+选做)"
-        }
+    homework = parse_json(response, default=default_homework, log_context="[备课-节点9]")
 
     return {
         "homework_design": homework,
         "last_action": "作业设计完成",
+        "intermediate_data": {
+            "homework_design": {
+                "homework": homework,
+            }
+        },
     }
 
 
@@ -842,14 +751,14 @@ def node_quality_check(state: LessonPrepState) -> dict:
 
     # 检查2: 教学过程至少4个环节
     process = state.get("teaching_process", [])
-    if isinstance(process, list) and len(process) < 4:
-        errors.append(f"教学过程环节不足: {len(process)}/5")
+    if isinstance(process, list) and len(process) < Thresholds.MIN_TEACHING_STAGES:
+        errors.append(f"教学过程环节不足: {len(process)}/{Thresholds.MIN_TEACHING_STAGES + 1}")
 
     # 检查3: 时间分配合理性
     if isinstance(process, list):
         total_time = sum(p.get("duration", 0) for p in process if isinstance(p, dict))
-        if total_time < 30 or total_time > 60:
-            errors.append(f"总时间偏差: {total_time}分钟 (期望40-50分钟)")
+        if total_time < Thresholds.LESSON_TOTAL_TIME_MIN or total_time > Thresholds.LESSON_TOTAL_TIME_MAX:
+            errors.append(f"总时间偏差: {total_time}分钟 (期望{Thresholds.LESSON_TOTAL_TIME_MIN + 10}-{Thresholds.LESSON_TOTAL_TIME_MAX - 10}分钟)")
 
     validation_passed = len(errors) == 0
 
@@ -862,6 +771,13 @@ def node_quality_check(state: LessonPrepState) -> dict:
         "validation_passed": validation_passed,
         "error_count": error_count,
         "last_action": f"质量校验{'通过' if validation_passed else '未通过'}",
+        "intermediate_data": {
+            "quality_check": {
+                "validation_errors": errors,
+                "validation_passed": validation_passed,
+                "error_count": error_count,
+            }
+        },
     }
 
 

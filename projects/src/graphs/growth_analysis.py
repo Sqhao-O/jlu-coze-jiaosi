@@ -19,38 +19,15 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from coze_coding_utils.runtime_ctx.context import new_context
 from coze_coding_utils.log.write_log import request_context
 
+from config.llm_config import get_llm_params, Thresholds
+from utils.json_parser import parse_json, extract_text_from_response
+
 from graphs.state import (
     TeachingState, GrowthAnalysisState, WorkflowMode,
 )
 
 logger = logging.getLogger(__name__)
 
-
-# ============================================================
-# 辅助函数
-# ============================================================
-
-def _extract_text(response) -> str:
-    """从LLM响应中提取文本"""
-    if isinstance(response.content, str):
-        return response.content
-    elif isinstance(response.content, list):
-        return " ".join(item.get("text", "") for item in response.content if isinstance(item, dict))
-    return str(response.content)
-
-
-def _parse_json(content: str, default: dict = None) -> dict:
-    """安全解析JSON"""
-    content = str(content).strip()
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning(f"[成长] JSON解析失败: {content[:200]}")
-        return default or {}
 
 
 # ============================================================
@@ -102,6 +79,7 @@ def node_data_collection(state: GrowthAnalysisState) -> dict:
         "collected_data": collected,
         "last_action": f"数据采集完成 - 周期: {period}, 估计{estimated_records}条记录",
         "workflow_mode": WorkflowMode.GROWTH_ANALYSIS,
+        "intermediate_data": {"data_collection": collected},
     }
 
 
@@ -128,6 +106,7 @@ def node_data_cleaning(state: GrowthAnalysisState) -> dict:
     return {
         "cleaned_data": cleaned,
         "last_action": "数据清洗完成",
+        "intermediate_data": {"data_cleaning": cleaned},
     }
 
 
@@ -164,15 +143,9 @@ def _analyze_dimension(ctx, dimension_name: str, dimension_desc: str, collected_
         HumanMessage(content=f"教学数据: {json.dumps(collected_data, ensure_ascii=False)[:2000]}")
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=1000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("dimension_analysis"))
 
-    return _parse_json(_extract_text(response), {
+    return parse_json(response, {
         "score": 6.0,
         "level": "发展中",
         "strengths": ["持续使用教学工具"],
@@ -180,7 +153,7 @@ def _analyze_dimension(ctx, dimension_name: str, dimension_desc: str, collected_
         "evidence": "基于可用数据评估",
         "growth_from_last": 0.0,
         "recommendation": "继续积累教学数据以获得更精准分析",
-    })
+    }, log_context="[成长-维度分析]")
 
 
 def node_dimension_design(state: GrowthAnalysisState) -> dict:
@@ -194,7 +167,7 @@ def node_dimension_design(state: GrowthAnalysisState) -> dict:
         "关注: 三层目标设计质量、教学过程完整性、课标对齐度、创新性。",
         state.get("cleaned_data", {})
     )
-    return {"dimension_design": result, "last_action": "教学设计力评估完成"}
+    return {"dimension_design": result, "last_action": "教学设计力评估完成", "intermediate_data": {"dimension_design": result}}
 
 
 def node_dimension_classroom(state: GrowthAnalysisState) -> dict:
@@ -208,7 +181,7 @@ def node_dimension_classroom(state: GrowthAnalysisState) -> dict:
         "关注: 追问深度、过渡自然度、应急反应速度、课堂氛围营造。",
         state.get("cleaned_data", {})
     )
-    return {"dimension_classroom": result, "last_action": "课堂驾驭力评估完成"}
+    return {"dimension_classroom": result, "last_action": "课堂驾驭力评估完成", "intermediate_data": {"dimension_classroom": result}}
 
 
 def node_dimension_diagnosis(state: GrowthAnalysisState) -> dict:
@@ -222,7 +195,7 @@ def node_dimension_diagnosis(state: GrowthAnalysisState) -> dict:
         "关注: 学情数据使用频率、分层策略恰当性、个性化指导质量。",
         state.get("cleaned_data", {})
     )
-    return {"dimension_diagnosis": result, "last_action": "学情诊断力评估完成"}
+    return {"dimension_diagnosis": result, "last_action": "学情诊断力评估完成", "intermediate_data": {"dimension_diagnosis": result}}
 
 
 def node_dimension_feedback(state: GrowthAnalysisState) -> dict:
@@ -236,7 +209,7 @@ def node_dimension_feedback(state: GrowthAnalysisState) -> dict:
         "关注: 分层作业设计质量、评价语的针对性和建设性、学生进步追踪。",
         state.get("cleaned_data", {})
     )
-    return {"dimension_feedback": result, "last_action": "评价反馈力评估完成"}
+    return {"dimension_feedback": result, "last_action": "评价反馈力评估完成", "intermediate_data": {"dimension_feedback": result}}
 
 
 def node_dimension_reflection(state: GrowthAnalysisState) -> dict:
@@ -250,7 +223,7 @@ def node_dimension_reflection(state: GrowthAnalysisState) -> dict:
         "关注: 反思的具体性和深度、改进计划的可执行性、持续跟踪的习惯。",
         state.get("cleaned_data", {})
     )
-    return {"dimension_reflection": result, "last_action": "反思成长力评估完成"}
+    return {"dimension_reflection": result, "last_action": "反思成长力评估完成", "intermediate_data": {"dimension_reflection": result}}
 
 
 def node_radar_aggregation(state: GrowthAnalysisState) -> dict:
@@ -285,11 +258,11 @@ def node_radar_aggregation(state: GrowthAnalysisState) -> dict:
     avg_score = round(total / len(dims), 1) if dims else 5.0
 
     # 确定总体水平
-    if avg_score >= 8.5:
+    if avg_score >= Thresholds.LEVEL_EXCELLENT:
         overall_level = "卓越"
-    elif avg_score >= 7.0:
+    elif avg_score >= Thresholds.LEVEL_PROFICIENT:
         overall_level = "熟练"
-    elif avg_score >= 5.0:
+    elif avg_score >= Thresholds.LEVEL_DEVELOPING:
         overall_level = "发展中"
     else:
         overall_level = "起步"
@@ -316,6 +289,7 @@ def node_radar_aggregation(state: GrowthAnalysisState) -> dict:
     return {
         "radar_data": radar_data,
         "last_action": f"五维聚合完成 - 综合评分{avg_score}/10 ({overall_level})",
+        "intermediate_data": {"radar_aggregation": radar_data},
     }
 
 
@@ -339,10 +313,10 @@ def node_trend_analysis(state: GrowthAnalysisState) -> dict:
     for name, data in dims.items():
         if isinstance(data, dict):
             growth = data.get("growth", 0)
-            if growth >= 0.5:
+            if growth >= Thresholds.TREND_SIGNIFICANT_UP:
                 trends[name] = "↑ 上升"
                 improving.append(name)
-            elif growth <= -0.5:
+            elif growth <= Thresholds.TREND_SIGNIFICANT_DOWN:
                 trends[name] = "↓ 下降"
                 declining.append(name)
             else:
@@ -361,6 +335,7 @@ def node_trend_analysis(state: GrowthAnalysisState) -> dict:
     return {
         "trend_analysis": trend_analysis,
         "last_action": f"趋势分析完成 - 整体趋势{trend_analysis['overall_trend']}",
+        "intermediate_data": {"trend_analysis": trend_analysis},
     }
 
 
@@ -388,16 +363,18 @@ def node_attribution_analysis(state: GrowthAnalysisState) -> dict:
     for name, dim in dims.items():
         if isinstance(dim, dict):
             growth = abs(dim.get("growth_from_last", 0))
-            if growth >= 0.5:  # 阈值放宽至0.5以获取更多分析
+            if growth >= Thresholds.ATTRIBUTION_MIN_CHANGE:
                 significant_changes[name] = {
                     "direction": "上升" if dim.get("growth_from_last", 0) > 0 else "下降",
                     "magnitude": round(growth, 1),
                 }
 
     if not significant_changes:
+        attribution_nochange = {"summary": "本周期各项能力保持稳定，无显著变化(≥0.5分)。这是正常的教学波动。", "details": []}
         return {
-            "attribution": {"summary": "本周期各项能力保持稳定，无显著变化(≥0.5分)。这是正常的教学波动。", "details": []},
+            "attribution": attribution_nochange,
             "last_action": "归因分析完成 - 无显著变化",
+            "intermediate_data": {"attribution_analysis": attribution_nochange},
         }
 
     system_prompt = """你是教师成长归因分析专家。对教学能力的变化进行可能的归因解释。
@@ -422,23 +399,18 @@ def node_attribution_analysis(state: GrowthAnalysisState) -> dict:
         HumanMessage(content=f"显著变化维度:\n{json.dumps(significant_changes, ensure_ascii=False, indent=2)}")
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=2000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("attribution_analysis"))
 
-    attribution = _parse_json(_extract_text(response), {
+    attribution = parse_json(response, {
         "summary": "基于数据的归因分析",
         "details": [],
         "overall_note": "数据仅供参考",
-    })
+    }, log_context="[成长-节点10]")
 
     return {
         "attribution": attribution,
         "last_action": "归因分析完成",
+        "intermediate_data": {"attribution_analysis": attribution},
     }
 
 
@@ -498,24 +470,19 @@ def node_achievement_discovery(state: GrowthAnalysisState) -> dict:
 请发现教师的意外进步。""")
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.8,  # 稍高温度让输出更有人情味
-        max_completion_tokens=2000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("achievement_discovery"))
 
-    achievements = _parse_json(_extract_text(response), {
+    achievements = parse_json(response, {
         "discoveries": [
             {"title": "持续使用教学工具", "description": "您坚持使用教思系统进行备课和反思，这种持续学习的习惯本身就是最大的进步。", "why_matters": "教学成长不是一蹴而就，而是日积月累", "evidence": "本周期多次使用备课和推演功能"}
         ],
         "celebration_message": "您的每一次备课、每一次反思、每一次推演，都在让自己成为更好的老师。这份坚持本身，就是最宝贵的成长。"
-    })
+    }, log_context="[成长-节点11]")
 
     return {
         "achievements": achievements,
         "last_action": "成就发现完成",
+        "intermediate_data": {"achievement_discovery": achievements},
     }
 
 
@@ -566,24 +533,19 @@ def node_suggestions_generation(state: GrowthAnalysisState) -> dict:
 请生成2-3条个性化发展建议。""")
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.6,
-        max_completion_tokens=2000,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("suggestions_generation"))
 
-    suggestions = _parse_json(_extract_text(response), {
+    suggestions = parse_json(response, {
         "suggestions": [
             {"focus": weakest or "教学能力", "priority": 1, "why": "持续提升教学核心能力", "how": "每周进行一次完整的备课→推演→反思循环", "jiao_si_support": "使用教学镜像体备课+策略沙盘体推演"}
         ],
         "next_step": "从现在开始，为下一堂课进行一次完整的教思循环。"
-    })
+    }, log_context="[成长-节点12]")
 
     return {
         "suggestions": suggestions,
         "last_action": "发展建议生成完成",
+        "intermediate_data": {"suggestions_generation": suggestions},
     }
 
 
@@ -626,19 +588,14 @@ def node_personalized_narrative(state: GrowthAnalysisState) -> dict:
         HumanMessage(content="请为这位教师写一段温暖的成长寄语。")
     ]
 
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.9,  # 更高温度让寄语更自然温暖
-        max_completion_tokens=800,
-        thinking="disabled"
-    )
+    response = client.invoke(messages=messages, **get_llm_params("personalized_narrative"))
 
-    narrative = _extract_text(response)
+    narrative = extract_text_from_response(response)
 
     return {
         "personalized_narrative": narrative,
         "last_action": "个性化寄语生成完成",
+        "intermediate_data": {"personalized_narrative": {"narrative": narrative}},
     }
 
 
