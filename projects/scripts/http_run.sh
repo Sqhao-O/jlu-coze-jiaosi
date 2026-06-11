@@ -1,7 +1,6 @@
 #!/bin/bash
 
-set -e
-# 导出环境变量
+set -euo pipefail
 
 # 基于脚本位置定位项目根目录（scripts/ 的上一级）
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -34,9 +33,16 @@ while getopts "p:h" opt; do
   esac
 done
 
+# 显式声明关键环境变量，不依赖平台执行环境继承
+export PORT
+
+# 清理端口残留进程（幂等性：重复执行不会冲突）
+fuser -k "${PORT}/tcp" 2>/dev/null || true
+sleep 1
+
 # 激活 .venv（devbox 环境），deploy 无 .venv 则跳过
 if [ -f "${PROJECT_DIR}/.venv/bin/activate" ]; then
   source "${PROJECT_DIR}/.venv/bin/activate"
 fi
 
-python ${PROJECT_DIR}/src/main.py -m http -p $PORT
+exec python ${PROJECT_DIR}/src/main.py -m http -p $PORT

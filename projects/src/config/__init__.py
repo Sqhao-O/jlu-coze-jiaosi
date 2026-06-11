@@ -6,7 +6,6 @@ Centralized Configuration Module
 """
 
 from config.llm_config import (
-    LLMConfig,
     ModelName,
     TaskTemperature,
     TaskMaxTokens,
@@ -16,7 +15,6 @@ from config.llm_config import (
 )
 
 __all__ = [
-    "LLMConfig",
     "ModelName",
     "TaskTemperature",
     "TaskMaxTokens",

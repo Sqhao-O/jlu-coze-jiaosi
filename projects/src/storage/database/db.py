@@ -29,11 +29,9 @@ def get_db_url() -> str:
                 url = env_var.value.replace("'", "'\\''")
                 return url
     except Exception as e:
-        logger.error(f"Error loading PGDATABASE_URL: {e}")
-        raise e
-    finally:
-        if url is None or url == "":
-            logger.error("PGDATABASE_URL is not set")
+        logger.warning(f"Could not load PGDATABASE_URL from project env vars: {e}")
+    if url is None or url == "":
+        logger.warning("PGDATABASE_URL is not set")
     return url
 _engine = None
 _SessionLocal = None
