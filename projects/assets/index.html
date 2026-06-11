@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/assets/logo.png">
     <title>教思 AI 教学助手</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
@@ -21,7 +22,7 @@
         /* Sidebar */
         .sidebar { width: 280px; background: var(--bg-sidebar); color: var(--text-sidebar); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
         .sidebar-header { padding: 20px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-        .sidebar-logo { font-size: 28px; }
+        .sidebar-logo img { width: 36px; height: 36px; border-radius: 8px; }
         .sidebar-title { font-size: 18px; font-weight: 700; }
         .sidebar-subtitle { font-size: 11px; color: var(--text-sidebar-muted); margin-top: 2px; }
 
@@ -144,7 +145,7 @@
 <!-- ========== Sidebar ========== -->
 <div class="sidebar">
     <div class="sidebar-header">
-        <div class="sidebar-logo">🧠</div>
+        <div class="sidebar-logo"><img src="/assets/logo.png" alt="教思"></div>
         <div>
             <div class="sidebar-title">教思</div>
             <div class="sidebar-subtitle">AI 教学助手</div>
