@@ -137,21 +137,30 @@ def node_chat_reply(state: LessonPrepState) -> dict:
     from coze_coding_dev_sdk import LLMClient
     client = LLMClient(ctx=ctx)
 
-    user_input = ""
+    # 构建完整对话历史（上下文联动）
     messages = state.get("messages", [])
-    if messages:
-        last_msg = messages[-1]
-        user_input = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+    chat_history = []
+    for msg in messages:
+        if hasattr(msg, "content") and hasattr(msg, "type"):
+            if msg.type == "human":
+                chat_history.append(HumanMessage(content=msg.content))
+            elif msg.type == "ai":
+                chat_history.append(AIMessage(content=msg.content))
+        elif isinstance(msg, dict):
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role == "user":
+                chat_history.append(HumanMessage(content=content))
+            elif role == "assistant":
+                chat_history.append(AIMessage(content=content))
 
     system_prompt = """你是「教思」AI 教学助手，一个温暖专业的教师伙伴。
 - 用简洁友好的语气回答
 - 如果教师想备课，引导他们使用备课功能
-- 回答控制在 3 句话以内"""
+- 回答控制在 3 句话以内
+- 注意理解上下文，记住用户之前说过的信息"""
 
-    msgs = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=str(user_input)),
-    ]
+    msgs = [SystemMessage(content=system_prompt)] + chat_history
 
     response = client.invoke(messages=msgs, **get_llm_params("chat"))
     # response 是 AIMessage 对象，必须用 .content 提取纯文本

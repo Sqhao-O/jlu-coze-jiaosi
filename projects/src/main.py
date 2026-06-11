@@ -410,12 +410,20 @@ async def openai_chat_completions(request: Request):
                 status_code=400,
             )
 
-        stream_input = openai_handler.request_converter.to_stream_input(req)
-        if not stream_input.get("messages"):
+        # 构建完整 messages（上下文联动），绕过 SDK 的 to_stream_input（它只取最后一条）
+        full_messages = []
+        for msg in req.messages:
+            role = msg.role
+            content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            full_messages.append({"role": role, "content": content})
+
+        if not full_messages:
             return JSONResponse(
                 content={"error": {"message": "No user message found", "type": "invalid_request_error", "code": "400002"}},
                 status_code=400,
             )
+
+        stream_input = {"messages": full_messages}
 
         # 注入教师信息和 mode 到 state（从前端 extra_body 传入）
         extra = payload.get("extra_body", {}) or {}
