@@ -53,10 +53,13 @@ from coze_coding_utils.openai.handler import OpenAIChatHandler
 from coze_coding_utils.log.parser import LangGraphParser
 from coze_coding_utils.log.err_trace import extract_core_stack
 from coze_coding_utils.log.loop_trace import init_run_config, init_agent_config
+from config.llm_config import get_llm_params, Thresholds
+from utils.json_parser import extract_text_from_response
+from graphs.graph import compile_graph
 
 
-# 超时配置常量
-TIMEOUT_SECONDS = 900  # 15分钟
+# 超时配置常量（使用集中化配置）
+TIMEOUT_SECONDS = Thresholds.TIMEOUT_SECONDS
 
 # === JSON → Markdown 格式化工具 ===
 
@@ -292,7 +295,7 @@ def format_teaching_content(content: str) -> str:
 
         # 只转换有实质内容的 JSON（跳过小型配置类 JSON）
         obj_str = json.dumps(obj, ensure_ascii=False)
-        if len(obj_str) > 50:  # 有实质内容
+        if len(obj_str) > Thresholds.JSON_MIN_LENGTH_FOR_FORMAT:  # 有实质内容
             has_meaningful_json = True
             md = _value_to_md(obj, depth=0)
             result_parts.append(md)
@@ -529,13 +532,16 @@ class GraphService:
             ]
 
             llm_response = await asyncio.wait_for(
-                asyncio.to_thread(client.invoke, messages=messages, model="doubao-seed-2-0-lite-260215", temperature=0.3, max_completion_tokens=8000),
+                asyncio.to_thread(client.invoke, messages=messages,
+                                  **get_llm_params("format_output")),
                 timeout=60.0
             )
 
-            if llm_response and hasattr(llm_response, 'content') and llm_response.content:
-                result_copy = dict(result)
-                result_copy[content_key] = llm_response.content.strip()
+            if llm_response:
+                text = extract_text_from_response(llm_response)
+                if text:
+                    result_copy = dict(result)
+                    result_copy[content_key] = text.strip()
                 result_copy["_formatted"] = True
                 return result_copy
 
@@ -715,9 +721,11 @@ async def lifespan(app: FastAPI):
         base = graph_helper.get_agent_instance("agents.agent", None)
     else:
         base = graph_helper.get_graph_instance("graphs.graph")
-    sync_graph = base.builder.compile()
+    # 使用 compile_graph 统一编译，支持断点配置
+    sync_graph = compile_graph(base.builder)
     global async_graph, async_runtime
-    async_graph = base.builder.compile(checkpointer=checkpointer)
+    # 异步图使用 checkpointer 以支持断点恢复
+    async_graph = compile_graph(base.builder, checkpointer=checkpointer)
     service.set_graph(sync_graph)
     async_runtime = AsyncTaskRuntime(
         session_factory=get_session, engine=engine,

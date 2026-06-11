@@ -5,9 +5,13 @@ TeachingThought Global State Definitions
 定义所有工作流和Agent共享的状态结构:
 - 10个会话变量 (Conversation Variables) → LangGraph State字段
 - 8个用户变量 (User Variables) → PostgreSQL持久化字段
+
+重构 v2.0: 状态隔离架构
+- messages: 仅保留用户输入和最终回复（禁止写入中间结果）
+- intermediate_data: 节点1-10的中间 JSON 结果统一写入此处
 """
 
-from typing import Annotated, TypedDict, Optional
+from typing import Annotated, TypedDict, Optional, Dict, Any, List
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
 
@@ -51,9 +55,23 @@ class TeachingState(TypedDict, total=False):
     """
     教思系统全局状态 — 会话级变量
 
+    状态隔离原则:
+    - intermediate_data: 所有节点(1-10/N-1)的中间计算结果写入此处
+    - messages: 仅保留用户输入和最终回复（使用 add_messages reducer）
+    - 顶层字段: 仅保留工作流控制字段和最终输出字段
+
     这些变量在整个会话生命周期中流转，通过LangGraph的State机制
     在各节点之间自动传递和合并。
     """
+    # --- 对话消息（仅用户输入 + 最终回复） ---
+    messages: Annotated[list[AnyMessage], add_messages]
+
+    # --- 中间数据隔离区 ---
+    # 所有节点(1-10/N-1)的中间 JSON 结果必须写入此处
+    # 禁止将中间结果写入 messages 或顶层字段
+    # 使用方式: state["intermediate_data"]["<node_name>"] = result
+    intermediate_data: Dict[str, Any]
+
     # --- 基础信息 ---
     subject: str                     # 当前科目: "语文"/"数学"/"英语"/.../"未指定"
     grade: str                       # 学段: "小学"/"初中"/"高中"
@@ -74,12 +92,8 @@ class TeachingState(TypedDict, total=False):
     error_count: int                 # 当前工作流重试计数
     max_retries: int                 # 最大重试次数 (默认3)
 
-    # --- 知识库缓存 ---
+    # --- 知识库缓存 (迁入 intermediate_data，保留类型定义) ---
     kb_results: KnowledgeBaseResults # RAG检索结果缓存
-
-    # --- 质量校验 ---
-    validation_errors: list[str]     # 质量校验发现的错误列表
-    validation_passed: bool          # 是否通过质量校验
 
 
 # ============================================================
@@ -111,11 +125,14 @@ class UserProfile(TypedDict, total=False):
 
 class LessonPrepState(TeachingState, total=False):
     """
-    智能备课工作流 State
+    智能备课工作流 State — 11节点
 
-    11节点工作流专用字段，继承所有TeachingState字段。
+    状态隔离规则:
+    - 输入字段保留在顶层 (lesson_subject, lesson_topic, ...)
+    - 节点 1-10 中间结果写入 intermediate_data["<node_name>"]
+    - 仅 final_lesson_plan 为顶层输出
     """
-    # 输入
+    # 输入字段（用户提供）
     lesson_subject: str              # 备课学科
     lesson_topic: str                # 备课课题
     lesson_grade: str                # 备课年级
@@ -123,43 +140,38 @@ class LessonPrepState(TeachingState, total=False):
     lesson_type: str                 # 课型: "新授课"/"复习课"/"习题课"/"实验课"/"综合课"
     style_preference: str            # 风格偏好标签
 
-    # 中间产物
-    kb_context: str                  # 融合后的知识库上下文
-    style_profile: dict              # 提取的风格特征
-    teaching_objectives: dict        # 三层教学目标
-    key_difficult_points: dict       # 重难点分析
-    teaching_process: list[dict]     # 教学过程 (5个环节)
-    board_design: dict               # 板书设计
-    tiered_exercises: dict           # 分层练习
-    homework_design: dict            # 作业设计
-
-    # 输出
+    # 输出字段（仅最终结果）
     final_lesson_plan: str           # 最终格式化教案
+
+    # 注意：以下字段已废弃，请使用 intermediate_data
+    # - kb_context → intermediate_data["kb_retrieval"]["kb_context"]
+    # - style_profile → intermediate_data["style_modeling"]["style_profile"]
+    # - teaching_objectives → intermediate_data["objectives_generation"]
+    # - key_difficult_points → intermediate_data["key_difficulty_design"]
+    # - teaching_process → intermediate_data["process_design"]["teaching_process"]
+    # - board_design → intermediate_data["board_design"]
+    # - tiered_exercises → intermediate_data["tiered_exercises"]
+    # - homework_design → intermediate_data["homework_design"]
+    # - validation_errors → intermediate_data["quality_check"]
 
 
 class SimulationState(TeachingState, total=False):
     """
-    教学推演工作流 State
+    教学推演工作流 State — 12节点 + 3路并行
 
-    12节点工作流专用字段，支持3路并行学生模拟。
+    状态隔离规则:
+    - 输入字段保留在顶层
+    - 节点中间结果写入 intermediate_data
+    - 仅 final_simulation_report 为顶层输出
     """
     # 输入
     source_lesson_plan: str          # 待推演的完整教案文本
     class_profile: dict              # 班级画像
     focus_stage: str                 # 聚焦环节
+    virtual_students: dict           # 虚拟学生角色卡
 
     # 3路并行模拟结果 (由Send扇出节点产生)
-    student_a_simulation: dict       # 基础生模拟结果
-    student_b_simulation: dict       # 中等生模拟结果
-    student_c_simulation: dict       # 优等生模拟结果
-
-    # 聚合分析
-    aggregated_results: dict         # 三路聚合结果
-    bottleneck_list: list[dict]      # 瓶颈列表
-    risk_assessment: dict            # 风险评级结果
-    contingency_plans: list[dict]    # 应急预案列表
-    optimization_suggestions: dict   # 优化建议
-    comparison_report: str           # 原版vs优化版对比
+    student_simulations: list[dict]  # 三路学生模拟结果聚合
 
     # 输出
     final_simulation_report: str     # 最终推演报告
@@ -167,33 +179,66 @@ class SimulationState(TeachingState, total=False):
 
 class GrowthAnalysisState(TeachingState, total=False):
     """
-    成长分析工作流 State
+    成长分析工作流 State — 14节点
 
-    12节点工作流专用字段。
+    状态隔离规则:
+    - 输入字段保留在顶层
+    - 节点中间结果写入 intermediate_data
+    - 仅 final_growth_report 为顶层输出
     """
     # 输入
     analysis_period: str             # 分析周期
     analysis_type: str               # 报告类型
 
-    # 数据采集
-    collected_data: dict             # 采集到的原始数据
-    cleaned_data: dict               # 清洗后的数据
-
-    # 五维分析
-    dimension_design: dict           # 维度1: 教学设计力
-    dimension_classroom: dict        # 维度2: 课堂驾驭力
-    dimension_diagnosis: dict        # 维度3: 学情诊断力
-    dimension_feedback: dict         # 维度4: 评价反馈力
-    dimension_reflection: dict       # 维度5: 反思成长力
-
-    # 聚合
-    radar_data: dict                 # 五维雷达图数据
-    trend_analysis: dict             # 趋势分析
-    attribution: dict                # 归因分析
-    suggestions: list[dict]          # 发展建议
-
     # 输出
     final_growth_report: str         # 最终成长报告
+
+
+# ============================================================
+# 中间数据键名常量 — 用于 intermediate_data 的标准化访问
+# ============================================================
+
+class IntermediateKey:
+    """intermediate_data 字典的标准化键名"""
+    # 备课工作流
+    LESSON_PARSE_REQUIREMENTS = "parse_requirements"
+    LESSON_KB_RETRIEVAL = "kb_retrieval"
+    LESSON_STYLE_MODELING = "style_modeling"
+    LESSON_OBJECTIVES = "objectives_generation"
+    LESSON_KEY_DIFFICULTY = "key_difficulty_design"
+    LESSON_PROCESS_DESIGN = "process_design"
+    LESSON_BOARD_DESIGN = "board_design"
+    LESSON_TIERED_EXERCISES = "tiered_exercises"
+    LESSON_HOMEWORK_DESIGN = "homework_design"
+    LESSON_QUALITY_CHECK = "quality_check"
+
+    # 推演工作流
+    SIM_PARSE_PLAN = "parse_lesson_plan"
+    SIM_VIRTUAL_CLASSROOM = "build_virtual_classroom"
+    SIM_STUDENT_A = "student_a_simulation"
+    SIM_STUDENT_B = "student_b_simulation"
+    SIM_STUDENT_C = "student_c_simulation"
+    SIM_AGGREGATE = "aggregate_results"
+    SIM_BOTTLENECK = "bottleneck_detection"
+    SIM_RISK = "risk_assessment"
+    SIM_CONTINGENCY = "contingency_plans"
+    SIM_OPTIMIZATION = "optimization_suggestions"
+    SIM_COMPARISON = "comparison_report"
+
+    # 成长分析工作流
+    GROWTH_COLLECT = "data_collection"
+    GROWTH_CLEAN = "data_cleaning"
+    GROWTH_DIM_DESIGN = "dimension_design"
+    GROWTH_DIM_CLASSROOM = "dimension_classroom"
+    GROWTH_DIM_DIAGNOSIS = "dimension_diagnosis"
+    GROWTH_DIM_FEEDBACK = "dimension_feedback"
+    GROWTH_DIM_REFLECTION = "dimension_reflection"
+    GROWTH_RADAR = "radar_aggregation"
+    GROWTH_TREND = "trend_analysis"
+    GROWTH_ATTRIBUTION = "attribution_analysis"
+    GROWTH_ACHIEVEMENT = "achievement_discovery"
+    GROWTH_SUGGESTIONS = "suggestions_generation"
+    GROWTH_NARRATIVE = "personalized_narrative"
 
 
 # ============================================================

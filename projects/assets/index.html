@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>教思 — AI 教学孪生系统</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
@@ -12,46 +12,56 @@
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
     <style>
         :root {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-tertiary: #1c2128;
-            --bg-card: rgba(30, 41, 59, 0.6);
-            --text-primary: #e6edf3;
-            --text-secondary: #8b949e;
-            --text-muted: #6e7681;
-            --accent: #58a6ff;
-            --accent-hover: #79b8ff;
-            --accent-glow: rgba(88, 166, 255, 0.3);
-            --user-bubble: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
-            --ai-bubble-bg: rgba(22, 27, 34, 0.9);
-            --border: #30363d;
-            --border-light: #21262d;
-            --success: #3fb950;
-            --warning: #d29922;
-            --error: #f85149;
-            --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --accent-light: rgba(37, 99, 235, 0.08);
+            --accent-glow: rgba(37, 99, 235, 0.2);
+            --user-bubble: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            --ai-bubble-bg: #ffffff;
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.1);
+            --radius-sm: 8px;
+            --radius: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --sidebar-width: 260px;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', Roboto, sans-serif;
-            background: var(--bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
             color: var(--text-primary);
             height: 100vh;
             display: flex;
             overflow: hidden;
         }
 
-        /* Sidebar */
+        /* ========== Sidebar ========== */
         .sidebar {
-            width: 260px;
+            width: var(--sidebar-width);
             background: var(--bg-secondary);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
-            transition: width 0.3s;
+            box-shadow: var(--shadow-sm);
+            z-index: 100;
         }
 
         .sidebar-header {
@@ -63,22 +73,22 @@
         }
 
         .sidebar-logo {
-            width: 36px; height: 36px;
+            width: 40px; height: 40px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
+            border-radius: var(--radius);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 22px;
             flex-shrink: 0;
+            color: white;
         }
 
         .sidebar-title {
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--text-primary);
         }
-
         .sidebar-subtitle {
             font-size: 11px;
             color: var(--text-muted);
@@ -88,27 +98,23 @@
         .new-chat-btn {
             margin: 16px;
             padding: 10px 16px;
-            background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
             border: none;
-            border-radius: 10px;
+            border-radius: var(--radius);
             color: white;
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
             transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
         }
-
         .new-chat-btn:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(31, 111, 235, 0.3);
-        }
-
-        .new-chat-btn svg {
-            width: 16px; height: 16px;
+            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
         }
 
         .chat-history {
@@ -116,688 +122,415 @@
             overflow-y: auto;
             padding: 0 12px;
         }
-
         .history-item {
             padding: 10px 12px;
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 4px;
-            transition: all 0.2s;
+            margin-bottom: 2px;
+            transition: all 0.15s;
             color: var(--text-secondary);
             font-size: 14px;
         }
-
-        .history-item:hover {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-        }
-
-        .history-item.active {
-            background: rgba(88, 166, 255, 0.1);
-            color: var(--accent);
-        }
-
-        .history-icon {
-            font-size: 14px;
-            flex-shrink: 0;
-        }
-
-        .history-text {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+        .history-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .history-item.active { background: var(--accent-light); color: var(--accent); }
+        .history-icon { font-size: 14px; flex-shrink: 0; }
+        .history-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .sidebar-footer {
-            padding: 16px;
+            padding: 12px 16px;
             border-top: 1px solid var(--border);
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
             text-align: center;
         }
 
-        /* Main Area */
+        /* ========== Main Area ========== */
         .main-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             min-width: 0;
+            background: transparent;
         }
 
         /* Header */
         .header {
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
-            padding: 14px 24px;
+            padding: 12px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-shrink: 0;
+            box-shadow: var(--shadow-sm);
         }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 20px;
-            cursor: pointer;
-        }
-
-        .header-title {
-            font-size: 16px;
-            font-weight: 500;
-        }
-
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .menu-toggle { display: none; background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; }
+        .header-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
         .header-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            color: var(--text-secondary);
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--success);
+            background: #ecfdf5; padding: 4px 12px; border-radius: 20px;
         }
-
         .status-dot {
             width: 8px; height: 8px;
             background: var(--success);
             border-radius: 50%;
-            box-shadow: 0 0 8px var(--success);
             animation: pulse 2s infinite;
         }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        /* ========== Visualization Panel (Co-Sight inspired) ========== */
+        .viz-panel-wrapper {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, padding 0.4s ease;
+        }
+        .viz-panel-wrapper.open {
+            max-height: 500px;
+            padding: 16px 24px;
+            overflow-y: auto;
+        }
+        .viz-panel-toggle {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 16px; margin: 0 0 0 auto;
+            font-size: 12px; color: var(--accent); cursor: pointer;
+            background: var(--accent-light); border: none; border-radius: 20px;
+            transition: all 0.2s;
+        }
+        .viz-panel-toggle:hover { background: rgba(37, 99, 235, 0.15); }
+
+        .viz-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .viz-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+        .viz-card h4 {
+            font-size: 13px; font-weight: 600; color: var(--text-secondary);
+            margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+            text-transform: uppercase; letter-spacing: 0.5px;
         }
 
-        /* Node Progress */
+        /* Stat Cards Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            transition: all 0.2s;
+            cursor: default;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .stat-card-icon { font-size: 28px; margin-bottom: 6px; }
+        .stat-card-value { font-size: 28px; font-weight: 700; }
+        .stat-card-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        .stat-card.green .stat-card-value { color: var(--success); }
+        .stat-card.blue .stat-card-value { color: var(--accent); }
+        .stat-card.amber .stat-card-value { color: var(--warning); }
+        .stat-card.purple .stat-card-value { color: #8b5cf6; }
+
+        /* SVG Radar Chart */
+        .radar-container { display: flex; justify-content: center; padding: 10px; }
+        .radar-svg { max-width: 280px; }
+        .radar-axis { stroke: var(--border); stroke-width: 1; }
+        .radar-grid { stroke: var(--border-light); stroke-width: 0.5; fill: none; }
+        .radar-fill { fill: rgba(37, 99, 235, 0.1); stroke: var(--accent); stroke-width: 2; }
+        .radar-dot { fill: var(--accent); }
+        .radar-label { font-size: 11px; fill: var(--text-secondary); text-anchor: middle; }
+        .radar-score { font-size: 10px; fill: var(--accent); text-anchor: middle; font-weight: 600; }
+
+        /* Style Vector Bars */
+        .style-bar-row {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+        }
+        .style-bar-label {
+            width: 60px; font-size: 12px; color: var(--text-secondary); text-align: right; flex-shrink: 0;
+        }
+        .style-bar-track {
+            flex: 1; height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden;
+        }
+        .style-bar-fill {
+            height: 100%; border-radius: 4px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            transition: width 0.6s ease;
+        }
+        .style-bar-value {
+            width: 36px; font-size: 11px; color: var(--text-secondary); flex-shrink: 0;
+        }
+
+        /* Teaching Timeline */
+        .timeline { position: relative; padding-left: 24px; }
+        .timeline::before {
+            content: ''; position: absolute; left: 10px; top: 4px; bottom: 4px;
+            width: 2px; background: var(--border);
+        }
+        .timeline-item {
+            position: relative; margin-bottom: 14px; padding-left: 6px;
+        }
+        .timeline-dot {
+            position: absolute; left: -18px; top: 4px;
+            width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent);
+            background: white;
+        }
+        .timeline-dot.active { background: var(--accent); }
+        .timeline-dot.done { background: var(--success); border-color: var(--success); }
+        .timeline-dot.warn { background: var(--warning); border-color: var(--warning); }
+        .timeline-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+        .timeline-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .timeline-desc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* ========== Node Progress ========== */
         .node-progress {
             display: none;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
-            padding: 12px 24px;
+            padding: 10px 24px;
             flex-shrink: 0;
         }
-
-        .node-progress.active {
-            display: block;
-        }
-
-        .progress-label {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-        }
-
-        .progress-nodes {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-        }
-
+        .node-progress.active { display: block; }
+        .progress-label { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+        .progress-nodes { display: flex; gap: 8px; overflow-x: auto; }
         .progress-node {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            white-space: nowrap;
-            transition: all 0.3s;
-            background: var(--bg-tertiary);
-            color: var(--text-muted);
-            border: 1px solid transparent;
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 14px; border-radius: 20px;
+            font-size: 12px; white-space: nowrap; transition: all 0.3s;
+            background: var(--bg-tertiary); color: var(--text-muted);
+            border: 1px solid var(--border);
         }
+        .progress-node .node-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+        .progress-node.running { background: var(--accent-light); color: var(--accent); border-color: rgba(37, 99, 235, 0.2); animation: nodeGlow 2s infinite; }
+        .progress-node.running .node-dot { background: var(--accent); animation: dotPulse 1s infinite; }
+        .progress-node.completed { background: #ecfdf5; color: var(--success); border-color: rgba(16, 185, 129, 0.2); }
+        .progress-node.completed .node-dot { background: var(--success); }
+        @keyframes nodeGlow { 0%,100%{box-shadow:0 0 0 rgba(37,99,235,0)} 50%{box-shadow:0 0 12px rgba(37,99,235,0.15)} }
+        @keyframes dotPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
 
-        .progress-node .node-dot {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            transition: all 0.3s;
-        }
-
-        .progress-node.pending {
-            color: var(--text-secondary);
-        }
-
-        .progress-node.running {
-            background: rgba(88, 166, 255, 0.1);
-            color: var(--accent);
-            border-color: rgba(88, 166, 255, 0.2);
-            animation: nodeGlow 2s infinite;
-        }
-
-        .progress-node.running .node-dot {
-            background: var(--accent);
-            animation: dotPulse 1s infinite;
-        }
-
-        .progress-node.completed {
-            background: rgba(63, 185, 80, 0.1);
-            color: var(--success);
-            border-color: rgba(63, 185, 80, 0.2);
-        }
-
-        .progress-node.completed .node-dot {
-            background: var(--success);
-        }
-
-        @keyframes nodeGlow {
-            0%, 100% { box-shadow: 0 0 0 rgba(88, 166, 255, 0); }
-            50% { box-shadow: 0 0 12px rgba(88, 166, 255, 0.2); }
-        }
-
-        @keyframes dotPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.3); }
-        }
-
-        /* Chat Container */
+        /* ========== Chat ========== */
         .chat-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-            scroll-behavior: smooth;
+            flex: 1; overflow-y: auto; padding: 24px; scroll-behavior: smooth;
         }
 
         /* Welcome */
         .welcome {
-            max-width: 680px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            text-align: center;
+            max-width: 680px; margin: 0 auto; padding: 48px 20px; text-align: center;
         }
-
         .welcome-hero {
             width: 80px; height: 80px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 40px;
-            margin: 0 auto 24px;
+            border-radius: 24px; display: flex; align-items: center; justify-content: center;
+            font-size: 40px; margin: 0 auto 24px;
             animation: welcomeFloat 3s ease-in-out infinite;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
         }
-
-        @keyframes welcomeFloat {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
-        }
-
+        @keyframes welcomeFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
         .welcome h2 {
-            font-size: 26px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-size: 26px; font-weight: 700; margin-bottom: 12px;
+            color: var(--text-primary);
         }
-
-        .welcome p {
-            font-size: 15px;
-            color: var(--text-secondary);
-            max-width: 480px;
-            margin: 0 auto 32px;
-            line-height: 1.7;
-        }
+        .welcome p { font-size: 15px; color: var(--text-secondary); max-width: 480px; margin: 0 auto 32px; line-height: 1.7; }
 
         .welcome-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            max-width: 600px;
-            margin: 0 auto;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px; max-width: 680px; margin: 0 auto;
         }
-
         .welcome-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 20px;
-            text-align: left;
-            cursor: pointer;
-            transition: all 0.3s;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 20px;
+            text-align: left; cursor: pointer;
+            transition: all 0.3s; box-shadow: var(--shadow);
         }
-
         .welcome-card:hover {
-            border-color: var(--accent);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(88, 166, 255, 0.15);
+            border-color: var(--accent); transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
         }
-
-        .welcome-card-icon {
-            font-size: 28px;
-            margin-bottom: 8px;
-        }
-
-        .welcome-card-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-
-        .welcome-card-desc {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
+        .welcome-card-icon { font-size: 28px; margin-bottom: 8px; }
+        .welcome-card-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+        .welcome-card-desc { font-size: 12px; color: var(--text-secondary); }
 
         /* Messages */
-        .message {
-            max-width: 800px;
-            margin: 0 auto 20px;
-            animation: messageIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        @keyframes messageIn {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message-row {
-            display: flex;
-            gap: 12px;
-        }
-
-        .message.user .message-row {
-            flex-direction: row-reverse;
-        }
-
+        .message { max-width: 820px; margin: 0 auto 20px; animation: messageIn 0.4s cubic-bezier(0.16,1,0.3,1); }
+        @keyframes messageIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        .message-row { display: flex; gap: 12px; }
+        .message.user .message-row { flex-direction: row-reverse; }
         .message-avatar {
-            width: 32px; height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            flex-shrink: 0;
-            margin-top: 4px;
+            width: 34px; height: 34px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; flex-shrink: 0; margin-top: 2px;
         }
-
-        .message.user .message-avatar {
-            background: var(--user-bubble);
-        }
-
-        .message.ai .message-avatar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        .message-body {
-            flex: 1;
-            min-width: 0;
-        }
+        .message.user .message-avatar { background: var(--user-bubble); color: white; }
+        .message.ai .message-avatar { background: linear-gradient(135deg,#667eea,#764ba2); color: white; }
+        .message-body { flex: 1; min-width: 0; }
 
         .message-bubble {
-            padding: 14px 18px;
-            border-radius: 18px;
-            line-height: 1.7;
-            font-size: 15px;
-            word-break: break-word;
+            padding: 14px 18px; border-radius: var(--radius-lg);
+            line-height: 1.7; font-size: 15px; word-break: break-word;
         }
-
         .message.user .message-bubble {
-            background: var(--user-bubble);
-            color: white;
-            border-bottom-right-radius: 6px;
-            margin-left: auto;
-            max-width: 85%;
+            background: var(--user-bubble); color: white;
+            border-bottom-right-radius: 6px; max-width: 85%; margin-left: auto;
         }
-
         .message.ai .message-bubble {
-            background: var(--ai-bubble-bg);
-            border: 1px solid var(--border);
-            border-bottom-left-radius: 6px;
-            max-width: 100%;
+            background: var(--ai-bubble-bg); border: 1px solid var(--border);
+            border-bottom-left-radius: 6px; max-width: 100%;
+            box-shadow: var(--shadow-sm);
         }
-
         .message-meta {
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-top: 4px;
-            padding: 0 6px;
+            font-size: 11px; color: var(--text-muted); margin-top: 4px; padding: 0 6px;
         }
+        .message.user .message-meta { text-align: right; }
 
-        .message.user .message-meta {
-            text-align: right;
-        }
-
-        /* Markdown in AI messages */
-        .message.ai .message-bubble h1,
-        .message.ai .message-bubble h2,
-        .message.ai .message-bubble h3 {
-            margin: 16px 0 10px;
-            color: var(--text-primary);
-        }
-
-        .message.ai .message-bubble h1 { font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-        .message.ai .message-bubble h2 { font-size: 17px; }
-        .message.ai .message-bubble h3 { font-size: 15px; }
-
-        .message.ai .message-bubble p {
-            margin: 8px 0;
-        }
-
-        .message.ai .message-bubble ul,
-        .message.ai .message-bubble ol {
-            margin: 8px 0;
-            padding-left: 24px;
-        }
-
-        .message.ai .message-bubble li {
-            margin: 4px 0;
-        }
-
+        /* Markdown */
+        .message.ai .message-bubble h1 { font-size: 20px; margin: 16px 0 10px; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        .message.ai .message-bubble h2 { font-size: 17px; margin: 14px 0 8px; color: var(--text-primary); }
+        .message.ai .message-bubble h3 { font-size: 15px; margin: 12px 0 6px; color: var(--text-primary); }
+        .message.ai .message-bubble p { margin: 8px 0; }
+        .message.ai .message-bubble ul, .message.ai .message-bubble ol { margin: 8px 0; padding-left: 24px; }
+        .message.ai .message-bubble li { margin: 4px 0; }
         .message.ai .message-bubble code {
-            background: rgba(110, 118, 129, 0.2);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 14px;
-            font-family: 'SF Mono', Monaco, monospace;
+            background: #f1f5f9; padding: 2px 6px; border-radius: 4px;
+            font-size: 14px; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            color: #e11d48;
         }
-
         .message.ai .message-bubble pre {
-            background: #0d1117;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 16px;
-            margin: 12px 0;
-            overflow-x: auto;
+            background: #1e293b; border: 1px solid #334155;
+            border-radius: var(--radius); padding: 16px; margin: 12px 0; overflow-x: auto;
         }
-
-        .message.ai .message-bubble pre code {
-            background: none;
-            padding: 0;
-            font-size: 13px;
-            line-height: 1.6;
+        .message.ai .message-bubble pre code { background: none; padding: 0; font-size: 13px; color: #e2e8f0; line-height: 1.6; }
+        .message.ai .message-bubble table { border-collapse: collapse; margin: 12px 0; width: 100%; font-size: 14px; }
+        .message.ai .message-bubble th, .message.ai .message-bubble td {
+            border: 1px solid var(--border); padding: 8px 12px; text-align: left;
         }
-
-        .message.ai .message-bubble table {
-            border-collapse: collapse;
-            margin: 12px 0;
-            width: 100%;
-        }
-
-        .message.ai .message-bubble th,
-        .message.ai .message-bubble td {
-            border: 1px solid var(--border);
-            padding: 8px 12px;
-            text-align: left;
-        }
-
-        .message.ai .message-bubble th {
-            background: var(--bg-tertiary);
-            font-weight: 600;
-        }
-
+        .message.ai .message-bubble th { background: var(--bg-tertiary); font-weight: 600; color: var(--text-primary); }
+        .message.ai .message-bubble td { color: var(--text-secondary); }
         .message.ai .message-bubble blockquote {
-            border-left: 3px solid var(--accent);
-            margin: 12px 0;
-            padding: 8px 16px;
-            background: rgba(88, 166, 255, 0.05);
-            border-radius: 0 8px 8px 0;
-        }
-
-        /* Copy button on code blocks */
-        .code-block-wrapper {
-            position: relative;
-            margin: 12px 0;
-        }
-
-        .code-block-wrapper pre {
-            margin: 0 !important;
-        }
-
-        .copy-btn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent); margin: 12px 0; padding: 8px 16px;
+            background: var(--accent-light); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
             color: var(--text-secondary);
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            cursor: pointer;
-            opacity: 0;
-            transition: all 0.2s;
         }
 
-        .code-block-wrapper:hover .copy-btn {
-            opacity: 1;
+        /* Code copy */
+        .code-block-wrapper { position: relative; margin: 12px 0; }
+        .code-block-wrapper pre { margin: 0 !important; }
+        .copy-btn {
+            position: absolute; top: 8px; right: 8px;
+            background: #334155; border: 1px solid #475569;
+            color: #94a3b8; padding: 4px 10px; border-radius: 6px;
+            font-size: 12px; cursor: pointer; opacity: 0; transition: all 0.2s;
         }
-
-        .copy-btn:hover {
-            background: var(--border);
-            color: var(--text-primary);
-        }
-
-        .copy-btn.copied {
-            background: rgba(63, 185, 80, 0.2);
-            color: var(--success);
-            border-color: rgba(63, 185, 80, 0.3);
-        }
+        .code-block-wrapper:hover .copy-btn { opacity: 1; }
+        .copy-btn:hover { background: #475569; color: white; }
+        .copy-btn.copied { background: rgba(16,185,129,0.2); color: var(--success); border-color: rgba(16,185,129,0.3); }
 
         /* Message Actions */
-        .message-actions {
-            display: flex;
-            gap: 8px;
-            padding: 4px 6px;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        .message:hover .message-actions {
-            opacity: 1;
-        }
-
+        .message-actions { display: flex; gap: 8px; padding: 4px 6px; opacity: 0; transition: opacity 0.2s; }
+        .message:hover .message-actions { opacity: 1; }
         .msg-action-btn {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 12px;
-            cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 4px;
-            transition: all 0.2s;
+            background: none; border: none; color: var(--text-muted); font-size: 12px;
+            cursor: pointer; padding: 2px 8px; border-radius: 4px; transition: all 0.2s;
         }
+        .msg-action-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
 
-        .msg-action-btn:hover {
-            color: var(--text-primary);
-            background: var(--bg-tertiary);
-        }
-
-        /* Typing Indicator */
-        .typing-indicator {
-            display: none;
-            max-width: 800px;
-            margin: 0 auto 20px;
-        }
-
-        .typing-indicator.active {
-            display: block;
-        }
-
-        .typing-content {
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-        }
-
+        /* Typing */
+        .typing-indicator { display: none; max-width: 820px; margin: 0 auto 20px; }
+        .typing-indicator.active { display: block; }
+        .typing-content { display: flex; gap: 12px; align-items: flex-start; }
         .typing-dots {
-            display: flex;
-            gap: 5px;
-            padding: 16px 20px;
-            background: var(--ai-bubble-bg);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            border-bottom-left-radius: 6px;
+            display: flex; gap: 5px; padding: 16px 20px;
+            background: var(--ai-bubble-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); border-bottom-left-radius: 6px;
         }
-
         .typing-dot {
-            width: 8px; height: 8px;
-            background: var(--accent);
-            border-radius: 50%;
-            animation: typingBounce 1.4s infinite ease-in-out both;
+            width: 8px; height: 8px; background: var(--accent);
+            border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both;
         }
+        .typing-dot:nth-child(1){animation-delay:-.32s}
+        .typing-dot:nth-child(2){animation-delay:-.16s}
+        @keyframes typingBounce { 0%,80%,100%{transform:scale(.5);opacity:.5} 40%{transform:scale(1);opacity:1} }
 
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-
-        @keyframes typingBounce {
-            0%, 80%, 100% { transform: scale(0.5); opacity: 0.5; }
-            40% { transform: scale(1); opacity: 1; }
-        }
-
-        /* Input Area */
+        /* Input */
         .input-area {
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border);
-            padding: 16px 24px;
-            flex-shrink: 0;
+            background: var(--bg-secondary); border-top: 1px solid var(--border);
+            padding: 14px 24px; flex-shrink: 0; box-shadow: 0 -1px 4px rgba(0,0,0,0.04);
         }
-
-        .input-wrapper {
-            display: flex;
-            gap: 12px;
-            align-items: flex-end;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
+        .input-wrapper { display: flex; gap: 12px; align-items: flex-end; max-width: 820px; margin: 0 auto; }
         .input-box {
-            flex: 1;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 12px 18px;
-            color: var(--text-primary);
-            font-size: 15px;
-            resize: none;
-            min-height: 48px;
-            max-height: 160px;
-            outline: none;
-            transition: all 0.2s;
-            font-family: inherit;
-            line-height: 1.5;
+            flex: 1; background: var(--bg-primary); border: 1.5px solid var(--border);
+            border-radius: var(--radius-lg); padding: 12px 18px;
+            color: var(--text-primary); font-size: 15px; resize: none;
+            min-height: 48px; max-height: 160px; outline: none;
+            transition: all 0.2s; font-family: inherit; line-height: 1.5;
         }
-
         .input-box:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-glow);
         }
-
-        .input-box::placeholder {
-            color: var(--text-muted);
-        }
-
-        .input-box:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+        .input-box::placeholder { color: var(--text-muted); }
+        .input-box:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .send-btn {
             width: 44px; height: 44px;
-            background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            border: none; border-radius: var(--radius); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
         }
-
-        .send-btn:hover:not(:disabled) {
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(31, 111, 235, 0.3);
-        }
-
-        .send-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .send-btn svg {
-            width: 20px; height: 20px;
-            fill: white;
-        }
+        .send-btn:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4); }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+        .send-btn svg { width: 20px; height: 20px; fill: white; }
 
         /* Quick Actions */
         .quick-actions {
-            display: flex;
-            gap: 8px;
-            padding: 0 0 12px;
-            max-width: 800px;
-            margin: 0 auto;
-            overflow-x: auto;
-            flex-wrap: wrap;
+            display: flex; gap: 8px; padding: 0 0 10px;
+            max-width: 820px; margin: 0 auto; overflow-x: auto; flex-wrap: wrap;
         }
-
         .quick-btn {
-            padding: 6px 14px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            color: var(--text-secondary);
-            font-size: 13px;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.2s;
-            font-family: inherit;
+            padding: 6px 16px; background: var(--bg-primary);
+            border: 1px solid var(--border); border-radius: 20px;
+            color: var(--text-secondary); font-size: 13px; cursor: pointer;
+            white-space: nowrap; transition: all 0.2s; font-family: inherit;
         }
-
-        .quick-btn:hover {
-            color: var(--accent);
-            border-color: var(--accent);
-            background: rgba(88, 166, 255, 0.05);
-        }
+        .quick-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-light); }
 
         /* Toast */
         .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            position: fixed; top: 20px; right: 20px; z-index: 2000;
+            display: flex; flex-direction: column; gap: 8px;
         }
-
         .toast {
-            background: var(--error);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-size: 14px;
-            transform: translateX(120%);
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            max-width: 360px;
+            padding: 12px 20px; border-radius: var(--radius); font-size: 14px;
+            transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+            max-width: 360px; color: white;
         }
-
-        .toast.show {
-            transform: translateX(0);
-        }
-
-        .toast.success {
-            background: var(--success);
-        }
-
-        .toast.info {
-            background: var(--accent);
-        }
+        .toast.show { transform: translateX(0); }
+        .toast.error { background: var(--error); }
+        .toast.success { background: var(--success); }
+        .toast.info { background: var(--accent); }
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -805,37 +538,25 @@
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-        /* Cursor blink for streaming */
+        /* Stream cursor */
         .stream-cursor {
-            display: inline-block;
-            width: 2px;
-            height: 18px;
-            background: var(--accent);
-            margin-left: 2px;
-            vertical-align: middle;
+            display: inline-block; width: 2px; height: 18px;
+            background: var(--accent); margin-left: 2px; vertical-align: middle;
             animation: cursorBlink 1s infinite;
         }
-
-        @keyframes cursorBlink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
+        @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
 
         /* Mobile */
         @media (max-width: 768px) {
             body { flex-direction: column; }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                border-right: none;
-                border-bottom: 1px solid var(--border);
-                display: none;
-            }
+            .sidebar { display: none; width: 100%; }
             .sidebar.open { display: flex; }
             .menu-toggle { display: block; }
             .message { max-width: 95%; }
-            .chat-container { padding: 16px; }
-            .header, .input-area { padding: 12px 16px; }
+            .chat-container { padding: 12px; }
+            .header, .input-area { padding: 10px 14px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .viz-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -851,13 +572,11 @@
         </div>
     </div>
     <button class="new-chat-btn" onclick="newChat()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v16m8-8H4"/></svg>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 4v16m8-8H4"/></svg>
         新建会话
     </button>
     <div class="chat-history" id="chatHistory"></div>
-    <div class="sidebar-footer">
-        支持 Markdown · 流式输出
-    </div>
+    <div class="sidebar-footer">支持可视化 · 流式输出</div>
 </div>
 
 <!-- Main Area -->
@@ -866,11 +585,62 @@
     <div class="header">
         <div class="header-left">
             <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-            <div class="header-title">新会话</div>
+            <div class="header-title" id="headerTitle">新会话</div>
         </div>
-        <div class="header-status">
-            <span class="status-dot"></span>
-            服务在线
+        <div style="display:flex;align-items:center;gap:12px;">
+            <button class="viz-panel-toggle" id="vizToggle" onclick="toggleVizPanel()" style="display:none;">
+                📊 可视化面板
+            </button>
+            <div class="header-status">
+                <span class="status-dot"></span>
+                服务在线
+            </div>
+        </div>
+    </div>
+
+    <!-- Visualization Panel (Co-Sight inspired) -->
+    <div class="viz-panel-wrapper" id="vizPanel">
+        <!-- Stats Row -->
+        <div class="stats-row" id="statsRow">
+            <div class="stat-card green">
+                <div class="stat-card-icon">📝</div>
+                <div class="stat-card-value" id="statPlans">0</div>
+                <div class="stat-card-label">累计备课</div>
+            </div>
+            <div class="stat-card blue">
+                <div class="stat-card-icon">🎯</div>
+                <div class="stat-card-value" id="statSimulations">0</div>
+                <div class="stat-card-label">推演次数</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-card-icon">📈</div>
+                <div class="stat-card-value" id="statScore">--</div>
+                <div class="stat-card-label">综合评分</div>
+            </div>
+            <div class="stat-card amber">
+                <div class="stat-card-icon">🔥</div>
+                <div class="stat-card-value" id="statDays">0</div>
+                <div class="stat-card-label">活跃天数</div>
+            </div>
+        </div>
+
+        <!-- Viz Grid -->
+        <div class="viz-grid" id="vizGrid">
+            <!-- Radar Chart -->
+            <div class="viz-card" id="radarCard" style="display:none;">
+                <h4>🎯 五维能力雷达</h4>
+                <div class="radar-container" id="radarContainer"></div>
+            </div>
+            <!-- Style Bars -->
+            <div class="viz-card" id="styleCard" style="display:none;">
+                <h4>🎨 教学风格向量</h4>
+                <div id="styleBarsContainer"></div>
+            </div>
+            <!-- Teaching Timeline -->
+            <div class="viz-card" id="timelineCard" style="display:none;">
+                <h4>📋 教学过程时间线</h4>
+                <div class="timeline" id="timelineContainer"></div>
+            </div>
         </div>
     </div>
 
@@ -885,27 +655,27 @@
         <div class="welcome" id="welcomeMsg">
             <div class="welcome-hero">📚</div>
             <h2>欢迎使用「教思」AI 教学孪生系统</h2>
-            <p>基于扣子平台大模型能力，为你提供智能备课、学情分析、教案推演等全方位教学辅助</p>
+            <p>基于大模型能力，为你提供智能备课、学情分析、教案推演、成长追踪等全方位教学辅助</p>
             <div class="welcome-cards">
-                <div class="welcome-card" onclick="sendQuick('帮我备课《勾股定理》，初中二年级')">
+                <div class="welcome-card" onclick="sendQuick('帮我备课《勾股定理》，初中二年级，启发式互动型')">
                     <div class="welcome-card-icon">📝</div>
                     <div class="welcome-card-title">智能备课</div>
-                    <div class="welcome-card-desc">自动生成教学设计、教学目标与重难点</div>
+                    <div class="welcome-card-desc">自动生成三层差异化教案、教学重难点与板书设计</div>
                 </div>
-                <div class="welcome-card" onclick="sendQuick('分析一个初二班级的学情特点')">
+                <div class="welcome-card" onclick="sendQuick('分析一个初二班级的语文学情特点')">
                     <div class="welcome-card-icon">👁️</div>
                     <div class="welcome-card-title">学情分析</div>
-                    <div class="welcome-card-desc">深度分析学生认知水平与学习特征</div>
+                    <div class="welcome-card-desc">多维诊断学生认知水平与学习特征</div>
                 </div>
-                <div class="welcome-card" onclick="sendQuick('模拟一次初中数学课堂的教学互动')">
+                <div class="welcome-card" onclick="sendQuick('帮我推演一堂初中数学课的教案效果')">
                     <div class="welcome-card-icon">🎭</div>
-                    <div class="welcome-card-title">课堂模拟</div>
-                    <div class="welcome-card-desc">推演课堂互动、预设学生提问与应对</div>
+                    <div class="welcome-card-title">教学推演</div>
+                    <div class="welcome-card-desc">虚拟课堂模拟，提前发现教学盲区</div>
                 </div>
-                <div class="welcome-card" onclick="sendQuick('帮我评估一位教师的教学能力')">
+                <div class="welcome-card" onclick="sendQuick('帮我生成一份本学期的教学成长报告')">
                     <div class="welcome-card-icon">📊</div>
                     <div class="welcome-card-title">成长分析</div>
-                    <div class="welcome-card-desc">评估教学能力，提供个性化发展建议</div>
+                    <div class="welcome-card-desc">五维能力雷达 + 趋势归因 + 发展建议</div>
                 </div>
             </div>
         </div>
@@ -914,9 +684,7 @@
             <div class="typing-content">
                 <div class="message-avatar">📚</div>
                 <div class="typing-dots">
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
                 </div>
             </div>
         </div>
@@ -926,9 +694,9 @@
     <div class="input-area">
         <div class="quick-actions">
             <button class="quick-btn" onclick="sendQuick('帮我备课《勾股定理》')">📝 智能备课</button>
-            <button class="quick-btn" onclick="sendQuick('分析一下班级学情')">👁️ 学情分析</button>
-            <button class="quick-btn" onclick="sendQuick('模拟课堂互动')">🎭 课堂模拟</button>
-            <button class="quick-btn" onclick="sendQuick('评估教师教学能力')">📊 成长分析</button>
+            <button class="quick-btn" onclick="sendQuick('分析班级学情')">👁️ 学情分析</button>
+            <button class="quick-btn" onclick="sendQuick('推演教案效果')">🎭 教学推演</button>
+            <button class="quick-btn" onclick="sendQuick('生成成长报告')">📊 成长分析</button>
         </div>
         <div class="input-wrapper">
             <textarea class="input-box" id="userInput" placeholder="输入你的教学需求..." rows="1" autofocus></textarea>
@@ -943,511 +711,598 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-    // ==================== Config ====================
-    const chatContainer = document.getElementById('chatContainer');
-    const welcomeMsg = document.getElementById('welcomeMsg');
-    const userInput = document.getElementById('userInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const typingIndicator = document.getElementById('typingIndicator');
-    const toastContainer = document.getElementById('toastContainer');
-    const nodeProgress = document.getElementById('nodeProgress');
-    const progressNodes = document.getElementById('progressNodes');
-    const chatHistory = document.getElementById('chatHistory');
-    const sidebar = document.getElementById('sidebar');
+// ==================== Config ====================
+const chatContainer = document.getElementById('chatContainer');
+const welcomeMsg = document.getElementById('welcomeMsg');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const typingIndicator = document.getElementById('typingIndicator');
+const toastContainer = document.getElementById('toastContainer');
+const nodeProgress = document.getElementById('nodeProgress');
+const progressNodes = document.getElementById('progressNodes');
+const chatHistory = document.getElementById('chatHistory');
+const sidebar = document.getElementById('sidebar');
+const vizPanel = document.getElementById('vizPanel');
+const vizToggle = document.getElementById('vizToggle');
+const headerTitle = document.getElementById('headerTitle');
 
-    let sessionId = 'session_' + Date.now();
-    let isGenerating = false;
-    let currentStreamElement = null;
-    let messageHistory = [];
-    let currentSession = { id: sessionId, title: '新会话', messages: [] };
+let sessionId = 'session_' + Date.now();
+let isGenerating = false;
+let messageHistory = [];
+let currentSession = { id: sessionId, title: '新会话', messages: [] };
+let vizData = { plans: 0, simulations: 0, score: null, days: 0 };
 
-    // ==================== Node Definitions ====================
-    const WORKFLOW_NODES = [
-        { id: 'parse', label: '需求解析', icon: '🔍' },
-        { id: 'kb', label: '知识检索', icon: '📖' },
-        { id: 'style', label: '风格建模', icon: '🎨' },
-        { id: 'objectives', label: '目标生成', icon: '🎯' },
-        { id: 'difficulty', label: '重难点设计', icon: '⚡' },
-        { id: 'process', label: '教学过程', icon: '📋' },
-        { id: 'evaluate', label: '评估优化', icon: '✅' },
-    ];
+// ==================== Node Definitions ====================
+const WORKFLOW_NODES = [
+    { id: 'parse', label: '需求解析', icon: '🔍' },
+    { id: 'kb', label: '知识检索', icon: '📖' },
+    { id: 'style', label: '风格建模', icon: '🎨' },
+    { id: 'objectives', label: '目标生成', icon: '🎯' },
+    { id: 'difficulty', label: '重难点设计', icon: '⚡' },
+    { id: 'process', label: '教学过程', icon: '📋' },
+    { id: 'evaluate', label: '评估优化', icon: '✅' },
+];
 
-    // ==================== UI Helpers ====================
-    function showToast(msg, type = 'error') {
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = msg;
-        toastContainer.appendChild(toast);
-        requestAnimationFrame(() => toast.classList.add('show'));
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 300);
-        }, 4000);
+// ==================== UI Helpers ====================
+function showToast(msg, type = 'error') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = msg;
+    toastContainer.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 4000);
+}
+
+function scrollToBottom() {
+    requestAnimationFrame(() => {
+        chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+    });
+}
+
+function setGenerating(state) {
+    isGenerating = state;
+    sendBtn.disabled = state;
+    userInput.disabled = state;
+    typingIndicator.classList.toggle('active', state);
+    nodeProgress.classList.toggle('active', state);
+}
+
+function toggleSidebar() { sidebar.classList.toggle('open'); }
+
+function toggleVizPanel() {
+    vizPanel.classList.toggle('open');
+    vizToggle.textContent = vizPanel.classList.contains('open') ? '📊 收起面板' : '📊 可视化面板';
+}
+
+function showVizPanel() {
+    if (!vizPanel.classList.contains('open')) {
+        vizPanel.classList.add('open');
+        vizToggle.textContent = '📊 收起面板';
     }
+    vizToggle.style.display = '';
+}
 
-    function scrollToBottom() {
-        requestAnimationFrame(() => {
-            chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
-        });
-    }
+// Auto-resize textarea
+userInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+});
+userInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
 
-    function setGenerating(state) {
-        isGenerating = state;
-        sendBtn.disabled = state;
-        userInput.disabled = state;
-        typingIndicator.classList.toggle('active', state);
-        nodeProgress.classList.toggle('active', state);
-    }
+// ==================== Node Progress ====================
+function initNodeProgress() {
+    progressNodes.innerHTML = '';
+    WORKFLOW_NODES.forEach((node) => {
+        const el = document.createElement('div');
+        el.className = 'progress-node pending';
+        el.dataset.nodeId = node.id;
+        el.innerHTML = `<span class="node-dot"></span>${node.icon} ${node.label}`;
+        progressNodes.appendChild(el);
+    });
+}
+function updateNodeProgress(nodeId, status) {
+    const el = progressNodes.querySelector(`[data-node-id="${nodeId}"]`);
+    if (el) { el.classList.remove('pending','running','completed'); el.classList.add(status); }
+}
 
-    function toggleSidebar() {
-        sidebar.classList.toggle('open');
-    }
+// ==================== Visualization: Radar Chart ====================
+function renderRadarChart(scores) {
+    const card = document.getElementById('radarCard');
+    const container = document.getElementById('radarContainer');
+    if (!scores || Object.keys(scores).length < 3) { card.style.display = 'none'; return; }
 
-    // Auto-resize textarea
-    userInput.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+    const labels = Object.keys(scores);
+    const values = Object.values(scores);
+    const n = labels.length;
+    if (n < 3) { card.style.display = 'none'; return; }
+
+    const size = 260, cx = size/2, cy = size/2, r = 110;
+    const angleSlice = (2 * Math.PI) / n;
+
+    let svg = `<svg class="radar-svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">`;
+
+    // Grid circles (3 levels: 2.5, 5, 7.5, 10)
+    [0.25, 0.5, 0.75, 1.0].forEach(level => {
+        const pts = [];
+        for (let i = 0; i < n; i++) {
+            const a = angleSlice * i - Math.PI / 2;
+            pts.push(`${cx + r * level * Math.cos(a)},${cy + r * level * Math.sin(a)}`);
+        }
+        svg += `<polygon points="${pts.join(' ')}" class="radar-grid"/>`;
     });
 
-    userInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
+    // Axes
+    for (let i = 0; i < n; i++) {
+        const a = angleSlice * i - Math.PI / 2;
+        svg += `<line x1="${cx}" y1="${cy}" x2="${cx + r * Math.cos(a)}" y2="${cy + r * Math.sin(a)}" class="radar-axis"/>`;
+    }
+
+    // Data polygon
+    const dataPts = [];
+    for (let i = 0; i < n; i++) {
+        const a = angleSlice * i - Math.PI / 2;
+        const val = Math.max(0, Math.min(10, values[i])) / 10;
+        dataPts.push(`${cx + r * val * Math.cos(a)},${cy + r * val * Math.sin(a)}`);
+    }
+    svg += `<polygon points="${dataPts.join(' ')}" class="radar-fill"/>`;
+
+    // Dots
+    for (let i = 0; i < n; i++) {
+        const a = angleSlice * i - Math.PI / 2;
+        const val = Math.max(0, Math.min(10, values[i])) / 10;
+        svg += `<circle cx="${cx + r * val * Math.cos(a)}" cy="${cy + r * val * Math.sin(a)}" r="4" class="radar-dot"/>`;
+    }
+
+    // Labels
+    for (let i = 0; i < n; i++) {
+        const a = angleSlice * i - Math.PI / 2;
+        const lr = r + 22;
+        const lx = cx + lr * Math.cos(a);
+        const ly = cy + lr * Math.sin(a) + 4;
+        svg += `<text x="${lx}" y="${ly}" class="radar-label">${labels[i]}</text>`;
+    }
+
+    // Scores
+    for (let i = 0; i < n; i++) {
+        const a = angleSlice * i - Math.PI / 2;
+        const val = Math.max(0, Math.min(10, values[i])) / 10;
+        const sr = r * val - 14;
+        const sx = cx + sr * Math.cos(a);
+        const sy = cy + sr * Math.sin(a) + 4;
+        svg += `<text x="${sx}" y="${sy}" class="radar-score">${values[i]}</text>`;
+    }
+
+    svg += '</svg>';
+    container.innerHTML = svg;
+    card.style.display = '';
+    showVizPanel();
+}
+
+// ==================== Visualization: Style Bars ====================
+function renderStyleBars(styleData) {
+    const card = document.getElementById('styleCard');
+    const container = document.getElementById('styleBarsContainer');
+    if (!styleData || Object.keys(styleData).length === 0) { card.style.display = 'none'; return; }
+
+    const labelMap = {
+        compactness: '紧凑度', interactivity: '互动度', depth: '知识深度',
+        interest: '趣味性', rigor: '严谨度', innovation: '创新度', warmth: '温暖度'
+    };
+
+    let html = '';
+    Object.entries(styleData).forEach(([key, val]) => {
+        const pct = Math.round((val || 0) * 100);
+        html += `<div class="style-bar-row">
+            <span class="style-bar-label">${labelMap[key] || key}</span>
+            <div class="style-bar-track"><div class="style-bar-fill" style="width:${pct}%"></div></div>
+            <span class="style-bar-value">${pct}%</span>
+        </div>`;
+    });
+    container.innerHTML = html;
+    card.style.display = '';
+    showVizPanel();
+}
+
+// ==================== Visualization: Teaching Timeline ====================
+function renderTeachingTimeline(stages) {
+    const card = document.getElementById('timelineCard');
+    const container = document.getElementById('timelineContainer');
+    if (!stages || !Array.isArray(stages) || stages.length === 0) { card.style.display = 'none'; return; }
+
+    const colors = ['done', 'active', 'active', 'active', 'warn'];
+    let html = '';
+    stages.forEach((s, i) => {
+        if (typeof s === 'object') {
+            const name = s.stage || s.stage_name || s.name || `环节${i+1}`;
+            const dur = s.duration || s.duration_min || '';
+            const desc = s.teacher_activity || s.core_content || s.description || '';
+            html += `<div class="timeline-item">
+                <div class="timeline-dot ${colors[i] || 'active'}"></div>
+                <div class="timeline-title">${name}</div>
+                ${dur ? `<div class="timeline-meta">⏱ ${dur}分钟</div>` : ''}
+                ${desc ? `<div class="timeline-desc">${desc}</div>` : ''}
+            </div>`;
         }
     });
+    container.innerHTML = html;
+    card.style.display = '';
+    showVizPanel();
+}
 
-    // ==================== Node Progress ====================
-    function initNodeProgress() {
-        progressNodes.innerHTML = '';
-        WORKFLOW_NODES.forEach((node, i) => {
-            const el = document.createElement('div');
-            el.className = 'progress-node pending';
-            el.dataset.nodeId = node.id;
-            el.innerHTML = `<span class="node-dot"></span>${node.icon} ${node.label}`;
-            progressNodes.appendChild(el);
+// ==================== Detect & Render Visualizations ====================
+function detectAndRenderVisualizations(text) {
+    if (!text) return;
+
+    // Try to find JSON blocks in the text
+    const jsonRegex = /\{[\s\S]*?\}/g;
+    const matches = text.match(jsonRegex) || [];
+
+    matches.forEach(m => {
+        try {
+            const obj = JSON.parse(m);
+            if (!obj || typeof obj !== 'object') return;
+
+            // Detect 5-dimension scores (radar)
+            const dimKeys = ['教学设计力','课堂驾驭力','学情诊断力','评价反馈力','反思成长力'];
+            const hasDims = dimKeys.filter(k => k in obj && typeof obj[k] === 'number');
+            if (hasDims.length >= 3) {
+                const scores = {};
+                dimKeys.forEach(k => { if (k in obj) scores[k] = obj[k]; });
+                renderRadarChart(scores);
+            }
+
+            // Detect 7-dim style vector
+            const styleKeys = ['compactness','interactivity','depth','interest','rigor','innovation','warmth'];
+            const hasStyle = styleKeys.filter(k => k in obj);
+            if (hasStyle.length >= 4) {
+                const styleData = {};
+                styleKeys.forEach(k => { if (k in obj) styleData[k] = obj[k]; });
+                renderStyleBars(styleData);
+            }
+
+            // Detect teaching stages
+            if (Array.isArray(obj) && obj.length >= 3 &&
+                obj.some(item => item && (item.stage || item.stage_name))) {
+                renderTeachingTimeline(obj);
+            }
+
+            // Detect nested arrays/objects for timeline
+            Object.values(obj).forEach(v => {
+                if (Array.isArray(v) && v.length >= 3 &&
+                    v.some(item => item && typeof item === 'object' && (item.stage || item.stage_name))) {
+                    renderTeachingTimeline(v);
+                }
+            });
+
+        } catch(e) { /* not JSON */ }
+    });
+
+    // Update stats
+    updateStatsCards();
+}
+
+function updateStatsCards() {
+    document.getElementById('statPlans').textContent = vizData.plans || 0;
+    document.getElementById('statSimulations').textContent = vizData.simulations || 0;
+    document.getElementById('statScore').textContent = vizData.score != null ? vizData.score + '/10' : '--';
+    document.getElementById('statDays').textContent = vizData.days || 0;
+}
+
+// ==================== Message Management ====================
+function hideWelcome() { if (welcomeMsg) welcomeMsg.style.display = 'none'; }
+
+function createMessageElement(content, role) {
+    hideWelcome();
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `message ${role}`;
+    const avatar = role === 'user' ? '👤' : '📚';
+    msgDiv.innerHTML = `
+        <div class="message-row">
+            <div class="message-avatar">${avatar}</div>
+            <div class="message-body">
+                <div class="message-bubble"></div>
+                <div class="message-meta">${new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</div>
+                ${role === 'ai' ? `<div class="message-actions">
+                    <button class="msg-action-btn" onclick="copyMessage(this)">📋 复制</button>
+                    <button class="msg-action-btn" onclick="regenerateMessage(this)">🔄 重新生成</button>
+                </div>` : ''}
+            </div>
+        </div>`;
+    const bubble = msgDiv.querySelector('.message-bubble');
+    if (role === 'ai') {
+        bubble.innerHTML = renderMarkdown(content);
+        addCopyButtons(bubble);
+        detectAndRenderVisualizations(content);
+    } else {
+        bubble.textContent = content;
+    }
+    chatContainer.insertBefore(msgDiv, typingIndicator);
+    scrollToBottom();
+    return msgDiv;
+}
+
+function createStreamMessageElement() {
+    hideWelcome();
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'message ai';
+    msgDiv.innerHTML = `
+        <div class="message-row">
+            <div class="message-avatar">📚</div>
+            <div class="message-body">
+                <div class="message-bubble"><span class="stream-cursor"></span></div>
+                <div class="message-meta">${new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</div>
+            </div>
+        </div>`;
+    chatContainer.insertBefore(msgDiv, typingIndicator);
+    scrollToBottom();
+    return msgDiv.querySelector('.message-bubble');
+}
+
+// ==================== JSON Formatting ====================
+function formatJsonToMarkdown(obj, level) {
+    level = level || 0;
+    if (obj === null || obj === undefined) return '';
+    if (typeof obj === 'string') {
+        if (obj.includes('##') || obj.includes('**') || obj.includes('```')) return obj;
+        return obj;
+    }
+    if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj);
+    const indent = '  '.repeat(level);
+    let md = '';
+    if (Array.isArray(obj)) {
+        if (obj.length === 0) return '';
+        if (obj.every(item => typeof item === 'string')) return obj.map(item => '• ' + item).join('\n');
+        obj.forEach(item => {
+            if (typeof item === 'object' && item !== null) md += formatJsonToMarkdown(item, level) + '\n\n';
+            else md += indent + '• ' + formatJsonToMarkdown(item, level + 1) + '\n';
         });
-    }
-
-    function updateNodeProgress(nodeId, status) {
-        const el = progressNodes.querySelector(`[data-node-id="${nodeId}"]`);
-        if (el) {
-            el.classList.remove('pending', 'running', 'completed');
-            el.classList.add(status);
-        }
-    }
-
-    // ==================== Message Management ====================
-    function hideWelcome() {
-        if (welcomeMsg) welcomeMsg.style.display = 'none';
-    }
-
-    function createMessageElement(content, role) {
-        hideWelcome();
-
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${role}`;
-
-        const avatar = role === 'user' ? '👤' : '📚';
-
-        msgDiv.innerHTML = `
-            <div class="message-row">
-                <div class="message-avatar">${avatar}</div>
-                <div class="message-body">
-                    <div class="message-bubble"></div>
-                    <div class="message-meta">${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</div>
-                    ${role === 'ai' ? `
-                        <div class="message-actions">
-                            <button class="msg-action-btn" onclick="copyMessage(this)">📋 复制</button>
-                            <button class="msg-action-btn" onclick="regenerateMessage(this)">🔄 重新生成</button>
-                        </div>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-
-        const bubble = msgDiv.querySelector('.message-bubble');
-        if (role === 'ai') {
-            bubble.innerHTML = renderMarkdown(content);
-            addCopyButtons(bubble);
-        } else {
-            bubble.textContent = content;
-        }
-
-        chatContainer.insertBefore(msgDiv, typingIndicator);
-        scrollToBottom();
-        return msgDiv;
-    }
-
-    function createStreamMessageElement() {
-        hideWelcome();
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'message ai';
-        msgDiv.innerHTML = `
-            <div class="message-row">
-                <div class="message-avatar">📚</div>
-                <div class="message-body">
-                    <div class="message-bubble"><span class="stream-cursor"></span></div>
-                    <div class="message-meta">${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</div>
-                </div>
-            </div>
-        `;
-        chatContainer.insertBefore(msgDiv, typingIndicator);
-        scrollToBottom();
-        return msgDiv.querySelector('.message-bubble');
-    }
-
-    // ==================== JSON Formatting ====================
-    function formatJsonToMarkdown(obj, level = 0) {
-        if (obj === null || obj === undefined) return '';
-        if (typeof obj === 'string') {
-            // Check if string contains markdown-like content
-            if (obj.includes('##') || obj.includes('**') || obj.includes('•') || obj.includes('```')) {
-                return obj;
-            }
-            return obj;
-        }
-        if (typeof obj === 'number' || typeof obj === 'boolean') {
-            return String(obj);
-        }
-
-        let md = '';
-        const indent = '  '.repeat(level);
-
-        if (Array.isArray(obj)) {
-            if (obj.length === 0) return '';
-            // Check if array items are simple strings
-            if (obj.every(item => typeof item === 'string')) {
-                return obj.map(item => `• ${item}`).join('\n');
-            }
-            // Array of objects (like teaching stages)
-            obj.forEach((item, idx) => {
-                if (typeof item === 'object' && item !== null) {
-                    md += formatJsonToMarkdown(item, level) + '\n\n';
-                } else {
-                    md += `${indent}• ${formatJsonToMarkdown(item, level + 1)}\n`;
-                }
-            });
-            return md;
-        }
-
-        if (typeof obj === 'object') {
-            const entries = Object.entries(obj);
-            entries.forEach(([key, value]) => {
-                const displayKey = translateKey(key);
-                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                    md += `${indent}**${displayKey}**\n\n${formatJsonToMarkdown(value, level + 1)}\n\n`;
-                } else if (Array.isArray(value)) {
-                    md += `${indent}**${displayKey}**\n\n${formatJsonToMarkdown(value, level + 1)}\n\n`;
-                } else if (typeof value === 'string' && value.length > 80) {
-                    md += `${indent}**${displayKey}**：${value}\n\n`;
-                } else {
-                    md += `${indent}**${displayKey}**：${value}\n\n`;
-                }
-            });
-        }
         return md;
     }
-
-    function translateKey(key) {
-        const map = {
-            'subject': '学科',
-            'topic': '课题',
-            'grade': '年级',
-            'lesson_hours': '课时',
-            'lesson_type': '课型',
-            'style_preference': '风格偏好',
-            'key_concerns': '关注要点',
-            'compactness': '紧凑度',
-            'interactivity': '互动度',
-            'depth': '知识深度',
-            'interest': '趣味性',
-            'rigor': '严谨性',
-            'innovation': '创新性',
-            'warmth': '亲和度',
-            'basic': '基础层',
-            'intermediate': '进阶层',
-            'advanced': '拓展层',
-            'knowledge': '知识目标',
-            'skill': '能力目标',
-            'emotion': '素养目标',
-            'key_point': '教学重点',
-            'difficult_points': '教学难点',
-            'content': '内容',
-            'reason': '理由',
-            'strategy': '策略',
-            'breakthrough_strategy': '突破策略',
-            'scaffolding': '脚手架',
-            'teacher_activity': '教师活动',
-            'student_activity': '学生活动',
-            'design_intent': '设计意图',
-            'transition': '过渡语',
-            'tier_notes': '分层说明',
-            'stage': '环节',
-            'duration': '时长',
-            'core_literacy_links': '核心素养关联',
-            'common_misconceptions': '常见误区',
-        };
-        return map[key] || key;
-    }
-
-    function tryParseJson(text) {
-        if (!text) return null;
-        // Try to find JSON object/array in text
-        const trimmed = text.trim();
-        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-            try {
-                return JSON.parse(trimmed);
-            } catch (e) {
-                // Try with relaxed parsing - sometimes JSON has trailing content
-                let depth = 0;
-                let inString = false;
-                let escape = false;
-                let endIdx = 0;
-                for (let i = 0; i < trimmed.length; i++) {
-                    const ch = trimmed[i];
-                    if (escape) { escape = false; continue; }
-                    if (ch === '\\') { escape = true; continue; }
-                    if (ch === '"' && !inString) { inString = true; }
-                    else if (ch === '"' && inString) { inString = false; }
-                    else if (!inString) {
-                        if (ch === '{' || ch === '[') depth++;
-                        else if (ch === '}' || ch === ']') {
-                            depth--;
-                            if (depth === 0) { endIdx = i + 1; break; }
-                        }
-                    }
-                }
-                if (endIdx > 0) {
-                    try {
-                        return JSON.parse(trimmed.slice(0, endIdx));
-                    } catch (e2) {
-                        return null;
-                    }
-                }
-                return null;
+    if (typeof obj === 'object') {
+        Object.entries(obj).forEach(([key, value]) => {
+            const dk = translateKey(key);
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                md += indent + '**' + dk + '**\n\n' + formatJsonToMarkdown(value, level + 1) + '\n\n';
+            } else if (Array.isArray(value)) {
+                md += indent + '**' + dk + '**\n\n' + formatJsonToMarkdown(value, level + 1) + '\n\n';
+            } else if (typeof value === 'string' && value.length > 80) {
+                md += indent + '**' + dk + '**：' + value + '\n\n';
+            } else {
+                md += indent + '**' + dk + '**：' + value + '\n\n';
             }
-        }
-        return null;
+        });
     }
+    return md;
+}
 
-    // ==================== Markdown Rendering ====================
-    function renderMarkdown(text) {
-        if (!text) return '';
+function translateKey(key) {
+    const map = {
+        'subject':'学科','topic':'课题','grade':'年级','lesson_hours':'课时','lesson_type':'课型',
+        'style_preference':'风格偏好','key_concerns':'关注要点','compactness':'紧凑度','interactivity':'互动度',
+        'depth':'知识深度','interest':'趣味性','rigor':'严谨性','innovation':'创新性','warmth':'亲和度',
+        'basic':'基础层','intermediate':'进阶层','advanced':'拓展层','knowledge':'知识目标','skill':'能力目标',
+        'emotion':'素养目标','key_point':'教学重点','difficult_points':'教学难点','content':'内容','reason':'理由',
+        'strategy':'策略','breakthrough_strategy':'突破策略','scaffolding':'脚手架','teacher_activity':'教师活动',
+        'student_activity':'学生活动','design_intent':'设计意图','transition':'过渡语','tier_notes':'分层说明',
+        'stage':'环节','duration':'时长','core_literacy_links':'核心素养关联','common_misconceptions':'常见误区',
+    };
+    return map[key] || key;
+}
 
-        // Try to parse as JSON first
-        const jsonObj = tryParseJson(text);
-        if (jsonObj !== null) {
-            const formatted = formatJsonToMarkdown(jsonObj);
+function tryParseJson(text) {
+    if (!text) return null;
+    const trimmed = text.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try { return JSON.parse(trimmed); } catch(e) {
+            let depth=0, inString=false, escape=false, endIdx=0;
+            for (let i=0; i<trimmed.length; i++) {
+                const ch=trimmed[i];
+                if (escape) { escape=false; continue; }
+                if (ch==='\\') { escape=true; continue; }
+                if (ch==='"'&&!inString) inString=true;
+                else if (ch==='"'&&inString) inString=false;
+                else if (!inString) {
+                    if (ch==='{'||ch==='[') depth++;
+                    else if (ch==='}'||ch===']') { depth--; if(depth===0){endIdx=i+1;break;} }
+                }
+            }
+            if (endIdx>0) { try { return JSON.parse(trimmed.slice(0,endIdx)); } catch(e2) { return null; } }
+            return null;
+        }
+    }
+    return null;
+}
+
+// ==================== Markdown Rendering ====================
+function renderMarkdown(text) {
+    if (!text) return '';
+    const jsonObj = tryParseJson(text);
+    if (jsonObj !== null) {
+        const formatted = formatJsonToMarkdown(jsonObj);
+        try {
             const html = marked.parse(formatted, { breaks: true, gfm: true });
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
-            temp.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
+            const temp = document.createElement('div'); temp.innerHTML = html;
+            temp.querySelectorAll('pre code').forEach(block => { try { hljs.highlightElement(block); } catch(e){} });
             return temp.innerHTML;
-        }
+        } catch(e) { return escapeHtml(formatted); }
+    }
+    try {
+        const html = marked.parse(text, { breaks: true, gfm: true });
+        const temp = document.createElement('div'); temp.innerHTML = html;
+        temp.querySelectorAll('pre code').forEach(block => { try { hljs.highlightElement(block); } catch(e){} });
+        return temp.innerHTML;
+    } catch(e) { return escapeHtml(text).replace(/\n/g,'<br>'); }
+}
 
-        try {
-            const html = marked.parse(text, { breaks: true, gfm: true });
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
-            temp.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
+function escapeHtml(text) {
+    const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
+}
+
+function addCopyButtons(container) {
+    container.querySelectorAll('pre').forEach(pre => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+        pre.parentNode.insertBefore(wrapper, pre); wrapper.appendChild(pre);
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn'; btn.textContent = '复制';
+        btn.onclick = () => {
+            const code = pre.querySelector('code')?.textContent || pre.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                btn.textContent = '已复制!'; btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
             });
-            return temp.innerHTML;
-        } catch (e) {
-            return escapeHtml(text).replace(/\n/g, '<br>');
-        }
+        };
+        wrapper.appendChild(btn);
+    });
+}
+
+// ==================== Actions ====================
+window.copyMessage = function(btn) {
+    const bubble = btn.closest('.message').querySelector('.message-bubble');
+    navigator.clipboard.writeText(bubble.textContent).then(() => showToast('已复制到剪贴板','success'));
+};
+
+window.regenerateMessage = function(btn) {
+    const messageEl = btn.closest('.message');
+    const prevUserMsg = messageEl.previousElementSibling;
+    if (prevUserMsg && prevUserMsg.classList.contains('user')) {
+        const text = prevUserMsg.querySelector('.message-bubble').textContent;
+        messageEl.remove(); sendQuick(text);
+    }
+};
+
+window.sendQuick = function(text) {
+    userInput.value = text;
+    userInput.style.height = 'auto';
+    userInput.style.height = Math.min(userInput.scrollHeight, 160) + 'px';
+    sendMessage();
+};
+
+window.newChat = function() {
+    if (currentSession.messages.length > 0) saveSession();
+    sessionId = 'session_' + Date.now();
+    currentSession = { id: sessionId, title: '新会话', messages: [] };
+    messageHistory = [];
+    chatContainer.querySelectorAll('.message').forEach(m => m.remove());
+    if (welcomeMsg) welcomeMsg.style.display = '';
+    vizPanel.classList.remove('open');
+    vizToggle.style.display = 'none';
+    headerTitle.textContent = '新会话';
+    userInput.value = '';
+    userInput.style.height = 'auto';
+    userInput.focus();
+};
+
+function saveSession() {
+    if (currentSession.messages.length === 0) return;
+    const firstMsg = currentSession.messages.find(m => m.role === 'user');
+    if (firstMsg) currentSession.title = firstMsg.content.slice(0, 20) + (firstMsg.content.length > 20 ? '...' : '');
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `<span class="history-icon">💬</span><span class="history-text">${escapeHtml(currentSession.title)}</span>`;
+    item.onclick = () => showToast('会话历史功能开发中', 'info');
+    chatHistory.insertBefore(item, chatHistory.firstChild);
+}
+
+// ==================== Send Message ====================
+window.sendMessage = async function() {
+    const content = userInput.value.trim();
+    if (!content || isGenerating) return;
+    userInput.value = '';
+    userInput.style.height = 'auto';
+    hideWelcome();
+    headerTitle.textContent = content.slice(0, 20) + (content.length > 20 ? '...' : '');
+    createMessageElement(content, 'user');
+    messageHistory.push({ role: 'user', content });
+    currentSession.messages.push({ role: 'user', content });
+    vizData.plans++;
+
+    setGenerating(true);
+    initNodeProgress();
+
+    try {
+        await sendStreamRequest(content);
+    } catch (err) {
+        console.error('Request error:', err);
+        createMessageElement('⚠️ 请求失败: ' + err.message + '\n\n可能原因:\n• 服务连接异常\n• 请求超时（AI 工作流需要 60-120 秒）', 'ai');
+        showToast(err.message);
     }
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+    setGenerating(false);
+    userInput.focus();
+    saveSession();
+};
 
-    function addCopyButtons(container) {
-        container.querySelectorAll('pre').forEach((pre) => {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'code-block-wrapper';
-            pre.parentNode.insertBefore(wrapper, pre);
-            wrapper.appendChild(pre);
+async function sendStreamRequest(content) {
+    const streamBubble = createStreamMessageElement();
+    updateNodeProgress(WORKFLOW_NODES[0].id, 'running');
+    let nodeIdx = 0;
 
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = '复制';
-            btn.onclick = () => {
-                const code = pre.querySelector('code')?.textContent || pre.textContent;
-                navigator.clipboard.writeText(code).then(() => {
-                    btn.textContent = '已复制!';
-                    btn.classList.add('copied');
-                    setTimeout(() => {
-                        btn.textContent = '复制';
-                        btn.classList.remove('copied');
-                    }, 2000);
-                });
+    try {
+        const response = await fetch('/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'vibe-coding',
+                messages: [{ role: 'user', content }],
+                stream: false,
+                session_id: sessionId
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || 'HTTP ' + response.status);
+        }
+
+        const data = await response.json();
+        var fullText = data.choices?.[0]?.message?.content || '（未获取到回复）';
+
+        // Typewriter animation
+        const totalLen = fullText.length;
+        let displayed = 0;
+        const CHUNK = 8;
+
+        await new Promise(resolve => {
+            const tick = () => {
+                displayed = Math.min(displayed + CHUNK, totalLen);
+                const partialText = fullText.slice(0, displayed);
+                const progress = displayed / totalLen;
+                const targetIdx = Math.min(Math.floor(progress * WORKFLOW_NODES.length), WORKFLOW_NODES.length - 1);
+                while (nodeIdx <= targetIdx) {
+                    updateNodeProgress(WORKFLOW_NODES[nodeIdx].id, 'completed');
+                    nodeIdx++;
+                }
+                streamBubble.innerHTML = renderMarkdown(partialText);
+                if (displayed < totalLen) {
+                    requestAnimationFrame(tick);
+                } else {
+                    for (let i = nodeIdx; i < WORKFLOW_NODES.length; i++) updateNodeProgress(WORKFLOW_NODES[i].id, 'completed');
+                    // Detect and render visualizations from the full response
+                    detectAndRenderVisualizations(fullText);
+                    resolve();
+                }
             };
-            wrapper.appendChild(btn);
+            requestAnimationFrame(tick);
         });
+
+    } catch (err) {
+        console.error('Request error:', err);
+        streamBubble.innerHTML = renderMarkdown('⚠️ 请求失败: ' + err.message + '\n\n可能原因:\n• 服务连接异常\n• 请求超时');
     }
 
-    // ==================== Actions ====================
-    window.copyMessage = function(btn) {
-        const bubble = btn.closest('.message').querySelector('.message-bubble');
-        const text = bubble.textContent;
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('已复制到剪贴板', 'success');
-        });
-    };
-
-    window.regenerateMessage = function(btn) {
-        const messageEl = btn.closest('.message');
-        const prevUserMsg = messageEl.previousElementSibling;
-        if (prevUserMsg && prevUserMsg.classList.contains('user')) {
-            const text = prevUserMsg.querySelector('.message-bubble').textContent;
-            messageEl.remove();
-            sendQuick(text);
-        }
-    };
-
-    window.sendQuick = function(text) {
-        userInput.value = text;
-        userInput.style.height = 'auto';
-        userInput.style.height = Math.min(userInput.scrollHeight, 160) + 'px';
-        sendMessage();
-    };
-
-    window.newChat = function() {
-        if (currentSession.messages.length > 0) {
-            saveSession();
-        }
-        sessionId = 'session_' + Date.now();
-        currentSession = { id: sessionId, title: '新会话', messages: [] };
-        messageHistory = [];
-
-        chatContainer.querySelectorAll('.message').forEach(m => m.remove());
-        if (welcomeMsg) welcomeMsg.style.display = '';
-        userInput.value = '';
-        userInput.style.height = 'auto';
-        userInput.focus();
-    };
-
-    function saveSession() {
-        if (currentSession.messages.length === 0) return;
-        const firstMsg = currentSession.messages.find(m => m.role === 'user');
-        if (firstMsg) {
-            currentSession.title = firstMsg.content.slice(0, 20) + (firstMsg.content.length > 20 ? '...' : '');
-        }
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        item.innerHTML = `<span class="history-icon">💬</span><span class="history-text">${escapeHtml(currentSession.title)}</span>`;
-        item.onclick = () => loadSession(currentSession);
-        chatHistory.insertBefore(item, chatHistory.firstChild);
+    scrollToBottom();
+    if (typeof fullText !== 'undefined' && fullText) {
+        messageHistory.push({ role: 'assistant', content: fullText });
+        currentSession.messages.push({ role: 'assistant', content: fullText });
+        addCopyButtons(streamBubble);
     }
+}
 
-    function loadSession(session) {
-        // In a real app, this would restore the full conversation
-        showToast('会话历史功能开发中', 'info');
-    }
-
-    // ==================== Send Message ====================
-    window.sendMessage = async function() {
-        const content = userInput.value.trim();
-        if (!content || isGenerating) return;
-
-        userInput.value = '';
-        userInput.style.height = 'auto';
-        createMessageElement(content, 'user');
-        messageHistory.push({ role: 'user', content });
-        currentSession.messages.push({ role: 'user', content });
-
-        setGenerating(true);
-        initNodeProgress();
-
-        try {
-            await sendStreamRequest(content);
-        } catch (err) {
-            console.error('Request error:', err);
-            createMessageElement(`⚠️ 请求失败: ${err.message}\n\n可能原因:\n• 服务连接异常\n• 请求超时（AI 工作流可能需要 30-60 秒）`, 'ai');
-            showToast(err.message);
-        }
-
-        setGenerating(false);
-        userInput.focus();
-    };
-
-    async function sendStreamRequest(content) {
-        const streamBubble = createStreamMessageElement();
-        updateNodeProgress(WORKFLOW_NODES[0].id, 'running');
-        let nodeIdx = 0;
-
-        try {
-            const response = await fetch('/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'vibe-coding',
-                    messages: [{ role: 'user', content }],
-                    stream: false,
-                    session_id: sessionId
-                })
-            });
-
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({}));
-                throw new Error(err.error?.message || `HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            var fullText = data.choices?.[0]?.message?.content || '（未获取到回复）';
-
-            // Typewriter animation: display formatted Markdown character by character
-            const totalLen = fullText.length;
-            let displayed = 0;
-            const CHUNK = 8; // chars per tick
-
-            await new Promise(resolve => {
-                const tick = () => {
-                    displayed = Math.min(displayed + CHUNK, totalLen);
-                    const partialText = fullText.slice(0, displayed);
-
-                    // Update node progress
-                    const progress = displayed / totalLen;
-                    const targetIdx = Math.min(Math.floor(progress * WORKFLOW_NODES.length), WORKFLOW_NODES.length - 1);
-                    while (nodeIdx <= targetIdx) {
-                        updateNodeProgress(WORKFLOW_NODES[nodeIdx].id, 'completed');
-                        nodeIdx++;
-                    }
-
-                    const html = renderMarkdown(partialText);
-                    streamBubble.innerHTML = html;
-
-                    if (displayed < totalLen) {
-                        requestAnimationFrame(tick);
-                    } else {
-                        // Mark all nodes completed
-                        for (let i = nodeIdx; i < WORKFLOW_NODES.length; i++) {
-                            updateNodeProgress(WORKFLOW_NODES[i].id, 'completed');
-                        }
-                        resolve();
-                    }
-                };
-                requestAnimationFrame(tick);
-            });
-
-        } catch (err) {
-            console.error('Request error:', err);
-            streamBubble.innerHTML = renderMarkdown(`⚠️ 请求失败: ${err.message}\n\n可能原因:\n• 服务连接异常\n• 请求超时（AI 工作流需要 60-120 秒）`);
-        }
-
-        scrollToBottom();
-        if (typeof fullText !== 'undefined' && fullText) {
-            messageHistory.push({ role: 'assistant', content: fullText });
-            currentSession.messages.push({ role: 'assistant', content: fullText });
-        }
-    }
+// ==================== Init ====================
+userInput.focus();
 </script>
-
 </body>
 </html>
