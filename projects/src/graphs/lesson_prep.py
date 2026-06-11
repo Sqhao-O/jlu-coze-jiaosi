@@ -154,11 +154,13 @@ def node_chat_reply(state: LessonPrepState) -> dict:
     ]
 
     response = client.invoke(messages=msgs, **get_llm_params("chat"))
-    reply = response if isinstance(response, str) else str(response)
+    # response 是 AIMessage 对象，必须用 .content 提取纯文本
+    reply = response.content if hasattr(response, "content") else str(response)
 
     return {
         "messages": [AIMessage(content=reply)],
-        "final_output": reply,
+        # 不设置 final_output，避免流式输出重复
+        # format_output 节点会处理 final_output
     }
 
 
@@ -927,16 +929,8 @@ def node_format_output(state: LessonPrepState) -> dict:
     """格式化输出：根据 intent 选择不同的格式化模板"""
     intent = state.get("intent", "chat")
 
-    # 闲聊：直接透传
+    # 闲聊：chat_reply 已通过 messages 流式推送文本，format_output 不再输出
     if intent == "chat":
-        messages = state.get("messages", [])
-        last_ai = ""
-        for msg in reversed(messages):
-            if hasattr(msg, "content") and getattr(msg, "type", "") == "ai":
-                last_ai = msg.content
-                break
-        if last_ai and not state.get("final_output"):
-            return {"final_output": last_ai}
         return {}
 
     # 功能模式：JSON → Markdown

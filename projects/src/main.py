@@ -522,7 +522,7 @@ async def _filtered_stream_generator(
                     chunk_type = chunk.__class__.__name__
                     node_name = (meta or {}).get("langgraph_node", "")
 
-                    if chunk_type in ("AIMessageChunk", "AIMessage"):
+                    if chunk_type == "AIMessageChunk":
                         text = getattr(chunk, "content", "")
                         if not text:
                             continue
