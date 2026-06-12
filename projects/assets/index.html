@@ -556,12 +556,11 @@ function switchToSession(sessionId) {
 
 function flushCurrentSession() {
     if (!activeSessionId) return;
-    // 从 DOM 读取当前消息并保存
+    // 从 DOM 读取当前消息并保存（仅同步，不修改 updatedAt，避免切换会话时列表跳动）
     const messages = collectMessagesFromDOM();
     const session = getSession(activeSessionId);
     if (session) {
         session.messages = messages;
-        session.updatedAt = Date.now();
         if (messages.length > 0) {
             const firstUser = messages.find(m => m.role === 'user');
             session.title = firstUser ? firstUser.content.slice(0, 30) : '新对话';
