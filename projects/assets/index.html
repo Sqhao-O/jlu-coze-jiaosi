@@ -140,20 +140,31 @@
         @media (max-width: 768px) { .sidebar { display: none; } }
 
         /* Knowledge panel */
-        .knowledge-panel { padding: 12px 16px; border-bottom: 1px solid var(--border); }
-        .knowledge-panel h3 { font-size: 14px; font-weight: 600; color: var(--text-secondary); margin: 0 0 10px 0; }
+        .knowledge-panel { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .knowledge-panel h3 { font-size: 13px; color: var(--text-sidebar-muted); margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+        .knowledge-panel h3 .collapse-arrow { font-size: 10px; transition: transform 0.2s; }
+        .knowledge-panel.collapsed h3 .collapse-arrow { transform: rotate(-90deg); }
+        .knowledge-panel-body { overflow: hidden; transition: max-height 0.3s ease, opacity 0.2s ease; max-height: 600px; opacity: 1; }
+        .knowledge-panel.collapsed .knowledge-panel-body { max-height: 0; opacity: 0; }
+        .knowledge-panel .form-group label { display: block; font-size: 12px; color: var(--text-sidebar-muted); margin-bottom: 4px; }
+        .knowledge-panel select { width: 100%; padding: 7px 10px; border: 1px solid rgba(255,255,255,0.12); border-radius: var(--radius-sm); background: rgba(255,255,255,0.06); color: var(--text-sidebar); font-size: 13px; outline: none; transition: border-color 0.2s; }
+        .knowledge-panel select:focus { border-color: var(--accent); }
+        .knowledge-panel select option { background: #2a2a4a; color: #fff; }
+        .kb-rag-hint { margin-top: 8px; padding: 5px 10px; border-radius: 6px; background: rgba(81,207,102,0.12); color: var(--success); font-size: 12px; display: none; align-items: center; gap: 5px; }
+        .kb-rag-hint.visible { display: flex; }
         .kb-actions { display: flex; gap: 8px; margin-top: 8px; }
-        .kb-btn { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; }
-        .kb-btn:hover { background: var(--bg-hover); }
-        .kb-btn.danger { color: #e53e3e; }
+        .kb-btn { padding: 4px 10px; font-size: 12px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--text-sidebar-muted); cursor: pointer; transition: all 0.15s; }
+        .kb-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-sidebar); }
+        .kb-btn.danger { color: #fc8181; border-color: rgba(252,129,129,0.2); }
+        .kb-btn.danger:hover { background: rgba(255,107,107,0.12); color: #fc8181; }
         .kb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .kb-docs { margin-top: 8px; }
         .kb-docs-toggle { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--text-sidebar); font-size: 12px; cursor: pointer; user-select: none; transition: background 0.15s; }
         .kb-docs-toggle:hover { background: rgba(255,255,255,0.1); }
         .kb-docs-toggle .toggle-arrow { transition: transform 0.2s; font-size: 10px; }
         .kb-docs-toggle.open .toggle-arrow { transform: rotate(90deg); }
-        .kb-docs-body { display: none; margin-top: 4px; padding: 4px 0; }
-        .kb-docs-body.open { display: block; }
+        .kb-docs-body { max-height: 0; overflow: hidden; margin-top: 4px; padding: 0 0; transition: max-height 0.3s ease, padding 0.3s ease; }
+        .kb-docs-body.open { max-height: 500px; padding: 4px 0; }
         .kb-doc-item { display: flex; align-items: center; padding: 4px 8px; font-size: 12px; border-radius: 4px; margin-bottom: 1px; color: var(--text-sidebar); }
         .kb-doc-item:hover { background: rgba(255,255,255,0.06); }
         .kb-doc-item .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -165,14 +176,17 @@
         .kb-docs-actions .kb-btn { flex: 1; padding: 5px 8px; font-size: 11px; }
         .kb-upload-status { font-size: 11px; color: var(--text-sidebar); margin-top: 4px; opacity: 0.8; }
         /* Create KB dialog */
-        .kb-dialog-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .kb-dialog { background: white; border-radius: 12px; padding: 20px; width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-        .kb-dialog h4 { margin: 0 0 12px 0; font-size: 16px; }
-        .kb-dialog input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; box-sizing: border-box; }
-        .kb-dialog textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; box-sizing: border-box; resize: vertical; min-height: 60px; }
+        .kb-dialog-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .kb-dialog { background: #2a2a4a; color: var(--text-sidebar); border-radius: 12px; padding: 20px; width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .kb-dialog h4 { margin: 0 0 12px 0; font-size: 16px; color: #fff; }
+        .kb-dialog input { width: 100%; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; font-size: 14px; box-sizing: border-box; background: rgba(255,255,255,0.06); color: var(--text-sidebar); outline: none; }
+        .kb-dialog input:focus { border-color: var(--accent); }
+        .kb-dialog textarea { width: 100%; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; font-size: 13px; box-sizing: border-box; resize: vertical; min-height: 60px; background: rgba(255,255,255,0.06); color: var(--text-sidebar); outline: none; }
+        .kb-dialog textarea:focus { border-color: var(--accent); }
         .kb-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
         .kb-dialog-actions button { padding: 6px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; }
-        .kb-dialog-actions .cancel-btn { background: var(--bg-secondary); color: var(--text-primary); }
+        .kb-dialog-actions .cancel-btn { background: rgba(255,255,255,0.08); color: var(--text-sidebar-muted); }
+        .kb-dialog-actions .cancel-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-sidebar); }
         .kb-dialog-actions .confirm-btn { background: var(--accent); color: white; }
     </style>
 </head>
@@ -255,29 +269,30 @@
 
     <!-- 知识库面板 -->
     <div class="knowledge-panel" id="knowledgePanel" style="display:block;">
-        <h3>📚 知识库</h3>
-        <div class="form-group">
-            <label>当前知识库</label>
-            <div class="combo-input" id="combo-kb">
-                <div class="select-input"><select id="kbSelect" onchange="onKBSelect()"><option value="">选择知识库</option></select></div>
+        <h3 onclick="toggleKBPanel()">📚 知识库 <span class="collapse-arrow">▼</span></h3>
+        <div class="knowledge-panel-body">
+            <div class="form-group">
+                <label>当前知识库</label>
+                <select id="kbSelect" onchange="onKBSelect()"><option value="">选择知识库</option></select>
             </div>
-        </div>
-        <div class="kb-actions">
-            <button class="kb-btn" onclick="showCreateKBDlg()">+ 新建知识库</button>
-            <button class="kb-btn danger" onclick="deleteCurrentKB()" id="deleteKBBtn" disabled>🗑 删除</button>
-        </div>
-        <div class="kb-docs" id="kbDocs" style="display:none;">
-            <div class="kb-docs-toggle" id="kbDocsToggle" onclick="toggleKBDocs()">
-                <span id="kbDocsToggleLabel">文档列表 (0)</span>
-                <span class="toggle-arrow">▶</span>
+            <div class="kb-rag-hint" id="kbRagHint">✓ 已启用知识库增强</div>
+            <div class="kb-actions">
+                <button class="kb-btn" onclick="showCreateKBDlg()">+ 新建</button>
+                <button class="kb-btn danger" onclick="deleteCurrentKB()" id="deleteKBBtn" disabled>🗑 删除</button>
             </div>
-            <div class="kb-docs-body" id="kbDocsBody">
-                <div id="kbDocList"></div>
+            <div class="kb-docs" id="kbDocs" style="display:none;">
+                <div class="kb-docs-toggle" id="kbDocsToggle" onclick="toggleKBDocs()">
+                    <span id="kbDocsToggleLabel">文档列表 (0)</span>
+                    <span class="toggle-arrow">▶</span>
+                </div>
+                <div class="kb-docs-body" id="kbDocsBody">
+                    <div id="kbDocList"></div>
+                </div>
+                <div class="kb-docs-actions">
+                    <button class="kb-btn" onclick="triggerUpload()">📤 上传文档</button>
+                </div>
+                <input type="file" id="kbFileInput" style="display:none;" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md" onchange="uploadFile(event)">
             </div>
-            <div class="kb-docs-actions">
-                <button class="kb-btn" onclick="triggerUpload()">📤 上传</button>
-            </div>
-            <input type="file" id="kbFileInput" style="display:none;" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md" onchange="uploadFile(event)">
         </div>
     </div>
 
@@ -342,6 +357,7 @@ let MODES = [
     { id: 'student_sim', name: '学情推演', icon: '👥', desc: '模拟不同学生的思维路径' },
     { id: 'interaction_design', name: '互动设计', icon: '💬', desc: '设计师生互动方案和话术' },
     { id: 'exam_gen', name: '智能命题', icon: '📝', desc: '一键生成结构化试题' },
+    { id: 'ppt_gen', name: 'PPT生成', icon: '📊', desc: '一键生成教学PPT课件' },
     { id: 'chat', name: '自由对话', icon: '🗨️', desc: '闲聊或提问' },
 ];
 
@@ -820,11 +836,12 @@ async function loadKBList() {
         kbListCache.forEach(kb => {
             const opt = document.createElement('option');
             opt.value = kb.id;
-            opt.textContent = `${kb.name} (${kb.doc_count}文档/${kb.chunk_count}块)`;
+            opt.textContent = `${kb.name}（${kb.doc_count}篇文档）`;
             sel.appendChild(opt);
         });
         if (currentKBId) sel.value = currentKBId;
         document.getElementById('deleteKBBtn').disabled = !currentKBId;
+        updateRAGHint();
     } catch (e) {
         console.error('加载知识库列表失败', e);
     }
@@ -834,11 +851,25 @@ function onKBSelect() {
     const sel = document.getElementById('kbSelect');
     currentKBId = sel.value;
     document.getElementById('deleteKBBtn').disabled = !currentKBId;
+    updateRAGHint();
     if (currentKBId) {
         loadKBDocs(currentKBId);
     } else {
         document.getElementById('kbDocs').style.display = 'none';
     }
+}
+
+function updateRAGHint() {
+    const hint = document.getElementById('kbRagHint');
+    if (currentKBId) {
+        hint.classList.add('visible');
+    } else {
+        hint.classList.remove('visible');
+    }
+}
+
+function toggleKBPanel() {
+    document.getElementById('knowledgePanel').classList.toggle('collapsed');
 }
 
 function toggleKBDocs() {
@@ -922,6 +953,7 @@ async function deleteCurrentKB() {
         currentKBId = '';
         await loadKBList();
         document.getElementById('kbDocs').style.display = 'none';
+        updateRAGHint();
     } catch (e) {
         alert('删除失败: ' + e.message);
     }

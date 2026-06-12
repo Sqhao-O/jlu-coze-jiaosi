@@ -151,11 +151,16 @@ intent_router → rag_enrich → [chat] → chat_reply → format_output
 4. **cozeloop 兼容性**：LangChain 1.0 移除了 `langchain.callbacks` 模块，需要 `cozeloop >= 0.1.28` 才能兼容
 5. **http_run.sh 幂等性**：脚本启动前会 `fuser -k` 清理端口残留进程，确保重复执行不会冲突
 6. **沙箱重置自愈**：`setup.sh` 和 `http_run.sh` 均内置 `ensure_uv` 函数，沙箱重置后 uv 和 .venv 被清除时自动重装 uv 并重新安装依赖，无需手动干预
-6. **闲聊场景 format_output**：`node_format_output` 在 `mode == "chat"` 时直接透传 `chat_reply` 的消息，不生成其他模板
-7. **mode 路由**：功能模式由前端 `extra_body.mode` 显式传入，`intent_router` 直接读取 `state.mode` 做路由，不依赖关键词猜测
-8. **subagent 扩展预留**：State 中预留 `modes: list[str]` 字段，当前单功能模式下 `modes = [mode]`，后续 subagent 模式可传入多个 mode 并行执行
-7. **教师信息注入**：前端通过 `extra_body` 传递备课参数（学科/年级/教学目标/重点/难点/课时时长/教学风格），后端在 `stream_input` 中注入，`generate_lesson_plan` 节点从 state 中读取并嵌入 prompt
-8. **教案生成耗时**：单次 LLM 调用约 10-30 秒完成完整教案，远快于原 11 节点串行方案的 2-5 分钟
-9. **知识库 RAG 架构**：`rag_enrich` 节点统一检索，位于 `intent_router` 和所有功能节点之间；`knowledge_base_id` 非空时检索知识库相关内容注入 `_knowledge_context`，为空时跳过；各功能节点和 chat_reply 自动从 `_knowledge_context` 读取并注入 System Prompt；检索使用 `coze-coding-dev-sdk.EmbeddingClient` 向量化 + 内存向量库（InMemoryVectorStore）余弦相似度检索；元数据用 JSON 文件持久化（`.knowledge_meta/`）；向量数据内存存储（`.knowledge_vectors/` 缓存）
-10. **EmbeddingClient 限制**：`embed_texts` 批量接口只返回单个向量，必须逐个调用 `embed_text`；向量维度 2048
-11. **python-multipart 依赖**：知识库文件上传需要 `python-multipart`，已加入 `pyproject.toml`
+7. **闲聊场景 format_output**：`node_format_output` 在 `mode == "chat"` 时直接透传 `chat_reply` 的消息，不生成其他模板
+8. **mode 路由**：功能模式由前端 `extra_body.mode` 显式传入，`intent_router` 直接读取 `state.mode` 做路由，不依赖关键词猜测
+9. **subagent 扩展预留**：State 中预留 `modes: list[str]` 字段，当前单功能模式下 `modes = [mode]`，后续 subagent 模式可传入多个 mode 并行执行
+10. **教师信息注入**：前端通过 `extra_body` 传递备课参数（学科/年级/教学目标/重点/难点/课时时长/教学风格），后端在 `stream_input` 中注入，`generate_lesson_plan` 节点从 state 中读取并嵌入 prompt
+11. **教案生成耗时**：单次 LLM 调用约 10-30 秒完成完整教案，远快于原 11 节点串行方案的 2-5 分钟
+12. **知识库 RAG 架构**：`rag_enrich` 节点统一检索，位于 `intent_router` 和所有功能节点之间；`knowledge_base_id` 非空时检索知识库相关内容注入 `_knowledge_context`，为空时跳过；各功能节点和 chat_reply 自动从 `_knowledge_context` 读取并注入 System Prompt；检索使用 `coze-coding-dev-sdk.EmbeddingClient` 向量化 + 内存向量库（InMemoryVectorStore）余弦相似度检索；元数据用 JSON 文件持久化（`.knowledge_meta/`）；向量数据内存存储（`.knowledge_vectors/` 缓存）
+13. **EmbeddingClient 限制**：`embed_texts` 批量接口只返回单个向量，必须逐个调用 `embed_text`；向量维度 2048
+14. **python-multipart 依赖**：知识库文件上传需要 `python-multipart`，已加入 `pyproject.toml`
+15. **前端知识库面板样式统一**：知识库面板与备课参数面板使用一致的暗色主题（标题 13px/sidebar-muted/uppercase、select 暗色背景 rgba、按钮暗色、边框 rgba(255,255,255,0.08)），不再使用浅色 CSS 变量
+16. **前端 MODES 与后端同步**：前端 JS 默认 MODES 数组包含全部 8 种模式（含 ppt_gen），与后端 TEACHER_CONFIG.modes 一致
+17. **知识库面板可折叠**：标题区域可点击折叠/展开，节省侧边栏空间
+18. **RAG 启用提示**：选中知识库后显示绿色提示条「已启用知识库增强」，取消选择后自动隐藏
+19. **新建知识库弹窗暗色适配**：弹窗背景、输入框、按钮均使用暗色主题，与侧边栏风格统一
