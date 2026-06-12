@@ -118,7 +118,7 @@
                    │
                    ▼
 ┌────────────────────────────────────────────┐
-│ LangGraph 工作流执行 (3 节点)                │
+│ LangGraph 工作流执行（条件路由）               │
 │                                             │
 │ ① intent_router:  确定 mode → intent        │
 │ ② rag_enrich:     知识库检索 + 上下文注入    │
@@ -525,7 +525,7 @@ def node_rag_enrich(state: LessonPrepState) -> dict:
 如果知识库内容与你的专业知识有冲突，以知识库为准并标注。
 ```
 
-##### 节点 3: 路由分发
+##### 路由分发（`route_intent`）
 
 ```python
 # 路由映射 — 条件边的路径表
@@ -545,7 +545,7 @@ def route_intent(state: LessonPrepState) -> str:
     return MODE_NODE_MAP.get(state.get("intent", "chat"), "chat_reply")
 ```
 
-##### 节点 4-11: 功能生成节点（统一模式）
+##### 节点 3-10: 功能生成节点（统一模式）
 
 每个功能节点遵循相同的实现模式：
 
@@ -604,7 +604,7 @@ def _extract_teacher_params(state: LessonPrepState) -> dict:
 | `generate_exam` | `{exam_meta(总分/时长/难度比例), questions(选择题/填空/判断/简答/应用题), difficulty_summary, exam_tips}` |
 | `generate_ppt` | `{title, slides(12-20页: 标题/版式/要点/内容概要/视觉建议/讲解提示), design_notes}` |
 
-##### 节点 12: `format_output` — 多模式格式化输出
+##### 节点 11: `format_output` — 多模式格式化输出
 
 ```python
 def node_format_output(state: LessonPrepState) -> dict:
@@ -643,7 +643,7 @@ def build_lesson_prep_graph() -> StateGraph:
     """构建多功能工作流图"""
     builder = StateGraph(LessonPrepState)
 
-    # 添加全部 12 个节点
+    # 注册全部 11 个节点（条件路由，每次请求仅执行单一功能节点）
     builder.add_node("intent_router", node_intent_router)
     builder.add_node("rag_enrich", node_rag_enrich)
     builder.add_node("chat_reply", node_chat_reply)
