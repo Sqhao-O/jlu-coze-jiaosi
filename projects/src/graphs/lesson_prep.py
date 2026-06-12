@@ -788,74 +788,71 @@ def node_rag_enrich(state: LessonPrepState) -> dict:
 
 
 # ============================================================
-# 节点8: PPT 生成（调用 Coze Doc Maker 工作流）
+# 节点8: PPT 大纲生成（LLM 生成结构化 PPT 大纲）
 # ============================================================
 
-import asyncio
-from utils.ppt_client import call_ppt_workflow
+PPT_OUTLINE_SYSTEM_PROMPT = """你是「教思」AI 教学助手的 PPT 大纲生成模块。根据教师提供的课题和备课参数，生成一份详细的 PPT 课件大纲。
+
+要求：
+1. 大纲应包含每一页幻灯片的标题、要点和内容概要
+2. 幻灯片数量根据课时时长合理规划（通常 45 分钟课 12-20 页）
+3. 结构应遵循教学逻辑：导入→新授→练习→小结
+4. 每页标注建议的呈现方式（文字/图表/动画/视频等）
+
+请严格以如下 JSON 格式输出：
+{
+  "title": "PPT课件标题",
+  "subject": "学科",
+  "grade": "年级",
+  "duration": 课时时长,
+  "total_slides": 幻灯片总数,
+  "overview": "课件整体设计思路（2-3句话）",
+  "slides": [
+    {
+      "slide_number": 1,
+      "title": "幻灯片标题",
+      "layout": "封面页/标题页/内容页/总结页/练习页/讨论页",
+      "key_points": ["要点1", "要点2"],
+      "content_summary": "本页内容概要",
+      "visual_suggestion": "建议的视觉呈现方式（图表/动画/图片等）",
+      "speaker_notes": "教师讲解提示"
+    }
+  ],
+  "design_notes": "整体设计说明和教学建议"
+}"""
 
 
 def node_generate_ppt(state: LessonPrepState) -> dict:
-    """PPT 生成：调用 Coze Doc Maker 工作流生成 .pptx 课件"""
-    logger.info("[PPT生成] 开始")
+    """PPT 大纲生成：根据课题和备课参数，生成结构化 PPT 课件大纲"""
+    ctx = request_context.get() or new_context(method="ppt_gen.generate")
+    logger.info("[PPT大纲] 开始")
 
-    topic = _resolve_topic(state)
-    if not topic:
-        topic = "教学课件"
+    from coze_coding_dev_sdk import LLMClient
+    client = LLMClient(ctx=ctx)
 
     params = _extract_teacher_params(state)
+    params["topic"] = _resolve_topic(state)
+    user_content = _build_user_content(params, "生成 PPT 课件大纲")
 
-    # 调用 Coze 工作流
-    loop = asyncio.new_event_loop()
-    try:
-        ppt_url = loop.run_until_complete(
-            call_ppt_workflow(
-                topic=topic,
-                subject=params.get("subject", ""),
-                grade=params.get("grade", ""),
-                duration=state.get("lesson_duration", 45),
-                objectives=state.get("lesson_objectives", ""),
-                key_points=state.get("key_points", ""),
-                difficult_points=state.get("difficult_points", ""),
-                style=state.get("style_preference", ""),
-            )
-        )
-    except Exception as e:
-        logger.error(f"[PPT生成] 工作流调用失败: {e}")
-        ppt_url = ""
-    finally:
-        loop.close()
+    system_prompt = PPT_OUTLINE_SYSTEM_PROMPT
+    knowledge_context = state.get("_knowledge_context", "")
+    if knowledge_context:
+        system_prompt += KNOWLEDGE_CONTEXT_TEMPLATE.format(context=knowledge_context)
 
-    if not ppt_url:
-        return {"ppt_download_url": "", "final_output": "PPT 生成失败，请稍后重试。"}
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_content),
+    ]
 
-    # 生成大纲预览（让用户在下载前知道 PPT 包含什么内容）
-    preview = f"""## 📊 PPT 课件已生成
+    response = client.invoke(messages=messages, **get_llm_params("creative"))
+    result = parse_json(response, default=None, log_context="[PPT大纲]")
 
-**课题**: {topic}
-**学科**: {params.get('subject', '未指定')} | **年级**: {params.get('grade', '未指定')} | **课时**: {state.get('lesson_duration', 45)}分钟
+    if result is None:
+        logger.warning("[PPT大纲] JSON 解析失败，使用原始文本")
+        result = {"title": params.get("topic", "PPT大纲"), "raw_text": response}
 
-### PPT 包含以下页面
-
-1. 封面页：课题名称 + 学科 + 年级
-2. 教学目标页：三维目标
-3. 重难点页：重点 + 难点
-4. 教学过程概览页
-5. 各教学环节页：导入、新授、练习、小结
-6. 板书设计页
-7. 分层练习页
-8. 作业布置页
-9. 教学反思页
-
-### 下载
-
-📥 [点击下载 PPT 课件]({ppt_url})
-
-> PPT 由 Coze Doc Maker 生成，可直接用 PowerPoint / WPS 打开编辑。
-"""
-
-    logger.info(f"[PPT生成] 完成, url={ppt_url[:80]}...")
-    return {"ppt_download_url": ppt_url, "final_output": preview}
+    logger.info("[PPT大纲] 完成")
+    return {"_ppt_outline_json": json.dumps(result, ensure_ascii=False)}
 
 
 # ============================================================
@@ -1314,6 +1311,90 @@ def _format_exam(data: dict) -> str:
     return "\n".join(md)
 
 
+# ============================================================
+# PPT 大纲格式化
+# ============================================================
+
+LAYOUT_ZH = {
+    "封面页": "🖼️ 封面页",
+    "标题页": "📌 标题页",
+    "内容页": "📄 内容页",
+    "总结页": "📋 总结页",
+    "练习页": "✏️ 练习页",
+    "讨论页": "💬 讨论页",
+}
+
+
+def _format_ppt_outline(data: dict) -> str:
+    """格式化 PPT 大纲"""
+    if isinstance(data, dict) and "raw_text" in data:
+        return data["raw_text"]
+
+    md = []
+    md.append(f"## 📊 {data.get('title', 'PPT 课件大纲')}\n")
+
+    # 基本信息
+    subject = data.get("subject", "")
+    grade = data.get("grade", "")
+    duration = data.get("duration", "")
+    total = data.get("total_slides", "")
+    if subject or grade or duration:
+        meta = []
+        if subject:
+            meta.append(f"**学科**：{subject}")
+        if grade:
+            meta.append(f"**年级**：{grade}")
+        if duration:
+            meta.append(f"**课时**：{duration}分钟")
+        if total:
+            meta.append(f"**页数**：{total}页")
+        md.append(" | ".join(meta))
+
+    # 整体思路
+    overview = data.get("overview", "")
+    if overview:
+        md.append(f"\n> 💡 **设计思路**：{overview}")
+
+    # 幻灯片大纲
+    slides = data.get("slides", [])
+    if slides:
+        md.append("\n---\n")
+        md.append("### 幻灯片大纲\n")
+        for s in slides:
+            num = s.get("slide_number", "")
+            title = s.get("title", "未命名")
+            layout = s.get("layout", "")
+            layout_label = LAYOUT_ZH.get(layout, layout)
+            md.append(f"#### 第{num}页：{title} {layout_label}\n")
+
+            key_points = s.get("key_points", [])
+            if key_points:
+                for kp in key_points:
+                    md.append(f"- {kp}")
+
+            content_summary = s.get("content_summary", "")
+            if content_summary:
+                md.append(f"\n*内容概要*：{content_summary}")
+
+            visual = s.get("visual_suggestion", "")
+            if visual:
+                md.append(f"\n*视觉建议*：{visual}")
+
+            notes = s.get("speaker_notes", "")
+            if notes:
+                md.append(f"\n*讲解提示*：{notes}")
+
+            md.append("")
+
+    # 设计说明
+    design_notes = data.get("design_notes", "")
+    if design_notes:
+        md.append("---\n")
+        md.append(f"> 🎨 **设计说明**：{design_notes}")
+
+    return "\n".join(md)
+
+
 # 格式化器注册表
 FORMATTERS = {
     WorkflowMode.LESSON_PREP:        _format_lesson_plan,
@@ -1322,6 +1403,7 @@ FORMATTERS = {
     WorkflowMode.STUDENT_SIM:        _format_student_sim,
     WorkflowMode.INTERACTION_DESIGN: _format_interaction_design,
     WorkflowMode.EXAM_GEN:           _format_exam,
+    WorkflowMode.PPT_GEN:            _format_ppt_outline,
 }
 
 # 各模式读取的中间数据字段
@@ -1332,7 +1414,7 @@ MODE_DATA_FIELD = {
     WorkflowMode.STUDENT_SIM:        "_student_sim_json",
     WorkflowMode.INTERACTION_DESIGN: "_interaction_json",
     WorkflowMode.EXAM_GEN:           "_exam_json",
-    WorkflowMode.PPT_GEN:            "_ppt_result_json",
+    WorkflowMode.PPT_GEN:            "_ppt_outline_json",
 }
 
 
@@ -1343,15 +1425,6 @@ def node_format_output(state: LessonPrepState) -> dict:
     # 闲聊：chat_reply 已通过 messages 流式推送文本，format_output 不再输出
     if intent == "chat":
         return {}
-
-    # PPT生成：特殊处理（大纲预览 + 下载链接）
-    if intent == "ppt_gen":
-        ppt_url = state.get("ppt_download_url", "")
-        ppt_outline = state.get("_ppt_outline_markdown", "")
-        if ppt_url:
-            download_section = f"\n\n---\n\n📥 **[点击下载 PPT 课件]({ppt_url})**\n"
-            return {"final_output": ppt_outline + download_section if ppt_outline else f"✅ PPT 课件已生成！\n\n📥 **[点击下载 PPT 课件]({ppt_url})**"}
-        return {"final_output": "PPT 生成失败，请重试。"}
 
     # 功能模式：JSON → Markdown
     data_field = MODE_DATA_FIELD.get(intent, "")

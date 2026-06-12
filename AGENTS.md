@@ -38,7 +38,7 @@
     │   │   └── knowledge.py      # 知识库管理 API 路由
     ├── src/utils/
     │   ├── json_parser.py     # LLM 输出 JSON 解析
-    │   └── ppt_client.py      # Coze Doc Maker 工作流调用客户端
+    │   └── ppt_client.py      # Coze Doc Maker 工作流调用客户端（已停用，保留备用）
     ├── assets/index.html     # 前端单页（教师面板 + 任务选择 + 流式渲染）
     ├── scripts/
     │   ├── setup.sh          # 依赖安装
@@ -101,7 +101,7 @@ intent_router → rag_enrich → [chat] → chat_reply → format_output
 | `student_sim` | simulate_student_profiles | 模拟优/中/困三层学生思维路径 |
 | `interaction_design` | design_interactions | 设计师生互动方案和话术 |
 | `exam_gen` | generate_exam | 一键生成结构化试题（多题型+分层难度+答案评分标准） |
-| `ppt_gen` | generate_ppt | 调用 Coze Doc Maker 生成教学课件 PPT |
+| `ppt_gen` | generate_ppt | 一键生成 PPT 课件大纲 |
 | `chat` | chat_reply | 自由对话 |
 
 ### RAG 通用增强
@@ -121,7 +121,7 @@ intent_router → rag_enrich → [chat] → chat_reply → format_output
 ### 前端参数化输入
 - 左侧面板：7 个核心参数（学科、年级、教学目标、重点、难点、课时时长、教学风格）
 - 每个参数支持「下拉选择 + 自定义输入」两种模式，点击切换按钮即可切换
-- 顶部功能选择器：7 种功能模式一键切换（教案生成/课堂预演/盲区检测/学情推演/互动设计/智能命题/PPT生成）
+- 顶部功能选择器：7 种功能模式一键切换（教案生成/课堂预演/盲区检测/学情推演/互动设计/智能命题/PPT大纲）
 - 知识库面板始终显示在左侧面板下方，选择知识库后所有模式自动启用 RAG 上下文增强
 - 功能模式通过 `extra_body.mode` 显式传入后端，后端根据 mode 路由
 - 各功能模式下输入框变为"课题"输入，无需手写提示词

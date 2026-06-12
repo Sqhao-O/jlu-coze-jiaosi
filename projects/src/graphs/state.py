@@ -44,10 +44,8 @@ class LessonPrepState(TypedDict, total=False):
     _student_sim_json: str    # 学情推演 JSON（student_sim 生成）
     _interaction_json: str    # 互动设计 JSON（interaction_design 生成）
     _exam_json: str           # 试题 JSON（exam_gen 生成）
+    _ppt_outline_json: str   # PPT 大纲 JSON（ppt_gen 模式）
     _knowledge_context: str   # RAG 检索上下文（rag_enrich 节点写入，供所有功能节点使用）
-
-    # --- PPT 生成 ---
-    ppt_download_url: str     # PPT 下载链接（ppt_gen 模式）
 
     # --- 知识库 ---
     knowledge_base_id: str    # 当前使用的知识库 ID
@@ -64,7 +62,7 @@ class WorkflowMode:
     STUDENT_SIM = "student_sim"              # 学情推演
     INTERACTION_DESIGN = "interaction_design" # 互动设计
     EXAM_GEN = "exam_gen"                    # 智能命题
-    PPT_GEN = "ppt_gen"                      # PPT 生成
+    PPT_GEN = "ppt_gen"                      # PPT 大纲
     CHAT = "chat"                            # 闲聊
 
     @classmethod
