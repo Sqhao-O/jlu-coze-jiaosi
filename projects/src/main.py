@@ -444,13 +444,39 @@ async def openai_chat_completions(request: Request):
                 stream_input[field] = extra[field]
 
         if not req.stream:
-            # 非流式
-            result = await openai_handler._handle_non_stream(
-                stream_input, session_id,
-                ResponseConverter(request_id=f"chatcmpl-{ctx.run_id}", model=req.model),
-                ctx,
-            )
-            return result
+            # 非流式：使用 LangGraph 工作流获取完整输出（包括 format_output 的 Markdown 和 RAG 标注）
+            workflow_result = await service.run(stream_input, ctx=ctx)
+            final_output = workflow_result.get("final_output", "")
+            if not final_output:
+                # 降级：使用 LLM 原始输出
+                messages = workflow_result.get("messages", [])
+                for msg in reversed(messages):
+                    content = msg.content if hasattr(msg, "content") else str(msg)
+                    if content:
+                        final_output = content
+                        break
+
+            # 构建 OpenAI 格式响应
+            response_data = {
+                "id": f"chatcmpl-{ctx.run_id}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": req.model,
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": final_output
+                    },
+                    "finish_reason": "stop"
+                }],
+                "usage": {
+                    "prompt_tokens": 0,
+                    "completion_tokens": len(final_output) // 4,  # 估算
+                    "total_tokens": len(final_output) // 4,
+                }
+            }
+            return JSONResponse(content=response_data)
 
         # 流式：自定义过滤
         return StreamingResponse(
