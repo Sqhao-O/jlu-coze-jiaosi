@@ -6,6 +6,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
+# 确保 uv 可用（沙箱重置后 uv 会被清除，需要自动重装）
+ensure_uv() {
+  if command -v uv &>/dev/null; then
+    return 0
+  fi
+  echo "[setup] uv not found, installing..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+  echo "[setup] uv installed: $(uv --version)"
+}
+ensure_uv
+
 # 初始化目录
 if [ "$COZE_PROJECT_ENV" = "DEV" ]; then
   if [ ! -d "${PROJECT_DIR}/assets" ]; then

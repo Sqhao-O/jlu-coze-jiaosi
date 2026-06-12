@@ -9,6 +9,17 @@ cd "$PROJECT_DIR"
 
 PORT="${DEPLOY_RUN_PORT:-5000}"
 
+# 确保 uv 可用（沙箱重置后 uv 会被清除，需要自动重装）
+ensure_uv() {
+  if command -v uv &>/dev/null; then
+    return 0
+  fi
+  echo "[run] uv not found, installing..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+  echo "[run] uv installed: $(uv --version)"
+}
+
 # 开发/预览环境标识，启用数据库降级
 export DEV_MODE="1"
 
@@ -42,6 +53,17 @@ sleep 1
 
 # 激活 .venv（devbox 环境），deploy 无 .venv 则跳过
 if [ -f "${PROJECT_DIR}/.venv/bin/activate" ]; then
+  source "${PROJECT_DIR}/.venv/bin/activate"
+else
+  # .venv 不存在（沙箱重置后），自动安装依赖
+  echo "[run] .venv not found, running setup first..."
+  ensure_uv
+  if [ -f "uv.lock" ]; then
+    uv sync --frozen || uv sync
+  else
+    uv sync
+  fi
+  touch .venv/.uv_ready
   source "${PROJECT_DIR}/.venv/bin/activate"
 fi
 

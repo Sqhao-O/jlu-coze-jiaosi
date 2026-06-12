@@ -121,6 +121,7 @@ intent_router → [chat] → chat_reply → format_output
 3. `project_type` 和 `preview_enable` 必须在根和子项目 `.coze` 中保持一致
 4. **cozeloop 兼容性**：LangChain 1.0 移除了 `langchain.callbacks` 模块，需要 `cozeloop >= 0.1.28` 才能兼容
 5. **http_run.sh 幂等性**：脚本启动前会 `fuser -k` 清理端口残留进程，确保重复执行不会冲突
+6. **沙箱重置自愈**：`setup.sh` 和 `http_run.sh` 均内置 `ensure_uv` 函数，沙箱重置后 uv 和 .venv 被清除时自动重装 uv 并重新安装依赖，无需手动干预
 6. **闲聊场景 format_output**：`node_format_output` 在 `mode == "chat"` 时直接透传 `chat_reply` 的消息，不生成其他模板
 7. **mode 路由**：功能模式由前端 `extra_body.mode` 显式传入，`intent_router` 直接读取 `state.mode` 做路由，不依赖关键词猜测
 8. **subagent 扩展预留**：State 中预留 `modes: list[str]` 字段，当前单功能模式下 `modes = [mode]`，后续 subagent 模式可传入多个 mode 并行执行
