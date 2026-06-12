@@ -8,16 +8,37 @@
 import json
 import logging
 import os
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-_META_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    ".knowledge_meta",
-)
+
+def _writable_dir(base_dir: str, subdir: str) -> str:
+    """返回可写目录路径：优先使用项目目录，不可写时降级到 /tmp"""
+    target = os.path.join(base_dir, subdir)
+    if os.path.isdir(target):
+        # 目录已存在，检查是否可写
+        if os.access(target, os.W_OK):
+            return target
+    else:
+        # 目录不存在，尝试创建
+        try:
+            os.makedirs(target, exist_ok=True)
+            return target
+        except OSError:
+            pass
+    # 降级到 /tmp
+    fallback = os.path.join(tempfile.gettempdir(), "vibe_coding", subdir)
+    os.makedirs(fallback, exist_ok=True)
+    logger.warning(f"[知识库] 项目目录不可写，降级到: {fallback}")
+    return fallback
+
+
+_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_META_DIR = _writable_dir(_PROJECT_DIR, ".knowledge_meta")
 
 
 def _meta_path() -> str:

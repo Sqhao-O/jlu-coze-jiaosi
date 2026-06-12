@@ -165,3 +165,6 @@ intent_router → rag_enrich → [chat] → chat_reply → format_output
 18. **RAG 启用提示**：选中知识库后显示绿色提示条「已启用知识库增强」，取消选择后自动隐藏
 19. **新建知识库弹窗暗色适配**：弹窗背景、输入框、按钮均使用暗色主题，与侧边栏风格统一
 20. **部署环境只读文件系统**：veFaaS 部署环境文件系统为只读，`http_run.sh` 通过 `is_deploy_env()` 检测（`PIP_TARGET` 已设置 或 项目目录不可写），跳过 `.venv` 创建，直接使用构建阶段通过 `PIP_TARGET` 安装到系统路径的依赖；`DEV_MODE` 也不在部署环境设置
+21. **知识库存储路径降级**：部署环境文件系统只读时，`store.py` 的 `_writable_dir()` 和 `vector_store.py` 的 `_writable_dir()` 自动将 `.knowledge_meta/` 和 `.knowledge_vectors/` 降级到 `/tmp/vibe_coding/` 下，确保知识库 CRUD 正常；开发/预览环境仍使用项目目录
+22. **全局异常处理**：`main.py` 注册了 `@app.exception_handler(Exception)` 确保所有未处理异常返回 JSON 格式（`{"detail": "..."}`），避免前端解析纯文本 "Internal Server Error" 报 JSON 解析错误
+23. **前端 API 调用统一**：`index.html` 中知识库相关 API 调用统一使用 `_apiFetch()` 封装，自动处理非 JSON 响应和 HTTP 错误状态码

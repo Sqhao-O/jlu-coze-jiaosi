@@ -833,10 +833,18 @@ function setStatus(text) {
 let currentKBId = '';
 let kbListCache = [];
 
+async function _apiFetch(url, options = {}) {
+    const resp = await fetch(url, options);
+    const text = await resp.text();
+    let data;
+    try { data = JSON.parse(text); } catch { throw new Error(text || `HTTP ${resp.status}`); }
+    if (!resp.ok) throw new Error(data.detail || data.message || `HTTP ${resp.status}`);
+    return data;
+}
+
 async function loadKBList() {
     try {
-        const resp = await fetch('/api/knowledge-bases');
-        kbListCache = await resp.json();
+        kbListCache = await _apiFetch('/api/knowledge-bases');
         const sel = document.getElementById('kbSelect');
         sel.innerHTML = '<option value="">选择知识库</option>';
         kbListCache.forEach(kb => {
@@ -891,8 +899,7 @@ function toggleKBDocs() {
 
 async function loadKBDocs(kbId) {
     try {
-        const resp = await fetch(`/api/knowledge-bases/${kbId}/documents`);
-        const docs = await resp.json();
+        const docs = await _apiFetch(`/api/knowledge-bases/${kbId}/documents`);
         const docsSection = document.getElementById('kbDocs');
         const docList = document.getElementById('kbDocList');
         const toggleLabel = document.getElementById('kbDocsToggleLabel');
@@ -944,8 +951,7 @@ async function createKB() {
         const form = new FormData();
         form.append('name', name);
         form.append('description', desc);
-        const resp = await fetch('/api/knowledge-bases', { method: 'POST', body: form });
-        const kb = await resp.json();
+        const kb = await _apiFetch('/api/knowledge-bases', { method: 'POST', body: form });
         currentKBId = kb.id;
         await loadKBList();
         onKBSelect();
@@ -959,7 +965,7 @@ async function deleteCurrentKB() {
     if (!currentKBId) return;
     if (!confirm('确定删除当前知识库及其所有文档？')) return;
     try {
-        await fetch(`/api/knowledge-bases/${currentKBId}`, { method: 'DELETE' });
+        await _apiFetch(`/api/knowledge-bases/${currentKBId}`, { method: 'DELETE' });
         currentKBId = '';
         await loadKBList();
         document.getElementById('kbDocs').style.display = 'none';
@@ -984,15 +990,10 @@ async function uploadFile(event) {
     try {
         const form = new FormData();
         form.append('file', file);
-        const resp = await fetch(`/api/knowledge-bases/${currentKBId}/upload`, { method: 'POST', body: form });
-        const result = await resp.json();
-        if (resp.ok) {
-            statusEl.textContent = `✅ ${file.name} → ${result.chunk_count} 块`;
-            await loadKBDocs(currentKBId);
-            await loadKBList();
-        } else {
-            statusEl.textContent = `❌ ${file.name}: ${result.detail || '上传失败'}`;
-        }
+        const result = await _apiFetch(`/api/knowledge-bases/${currentKBId}/upload`, { method: 'POST', body: form });
+        statusEl.textContent = `✅ ${file.name} → ${result.chunk_count} 块`;
+        await loadKBDocs(currentKBId);
+        await loadKBList();
     } catch (e) {
         statusEl.textContent = `❌ 上传失败: ${e.message}`;
     }
@@ -1004,7 +1005,7 @@ async function uploadFile(event) {
 async function deleteDoc(kbId, docId) {
     if (!confirm('确定删除此文档？')) return;
     try {
-        await fetch(`/api/knowledge-bases/${kbId}/documents/${docId}`, { method: 'DELETE' });
+        await _apiFetch(`/api/knowledge-bases/${kbId}/documents/${docId}`, { method: 'DELETE' });
         await loadKBDocs(kbId);
         await loadKBList();
     } catch (e) {

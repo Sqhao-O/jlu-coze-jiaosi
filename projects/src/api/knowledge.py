@@ -9,6 +9,7 @@ import os
 from typing import Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi.responses import JSONResponse
 
 from knowledge import store
 from knowledge.parser import extract_text
@@ -25,7 +26,11 @@ router = APIRouter(prefix="/api/knowledge-bases", tags=["knowledge"])
 @router.get("")
 async def list_knowledge_bases():
     """列出所有知识库"""
-    return store.list_knowledge_bases()
+    try:
+        return store.list_knowledge_bases()
+    except Exception as e:
+        logger.error(f"[知识库] 列表查询失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"知识库列表查询失败: {str(e)}")
 
 
 @router.post("")
@@ -33,15 +38,25 @@ async def create_knowledge_base(name: str = Form(...), description: str = Form("
     """创建知识库"""
     if not name.strip():
         raise HTTPException(status_code=400, detail="知识库名称不能为空")
-    return store.create_knowledge_base(name.strip(), description.strip())
+    try:
+        return store.create_knowledge_base(name.strip(), description.strip())
+    except Exception as e:
+        logger.error(f"[知识库] 创建失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"知识库创建失败: {str(e)}")
 
 
 @router.delete("/{kb_id}")
 async def delete_knowledge_base(kb_id: str):
     """删除知识库"""
-    if not store.delete_knowledge_base(kb_id):
-        raise HTTPException(status_code=404, detail="知识库不存在")
-    return {"status": "deleted", "kb_id": kb_id}
+    try:
+        if not store.delete_knowledge_base(kb_id):
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        return {"status": "deleted", "kb_id": kb_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[知识库] 删除失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"知识库删除失败: {str(e)}")
 
 
 # ==================== 文档管理 ====================
@@ -49,10 +64,16 @@ async def delete_knowledge_base(kb_id: str):
 @router.get("/{kb_id}/documents")
 async def list_documents(kb_id: str):
     """列出知识库下的文档"""
-    kb = store.get_knowledge_base(kb_id)
-    if not kb:
-        raise HTTPException(status_code=404, detail="知识库不存在")
-    return store.list_documents(kb_id)
+    try:
+        kb = store.get_knowledge_base(kb_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        return store.list_documents(kb_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[知识库] 文档列表查询失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"文档列表查询失败: {str(e)}")
 
 
 @router.post("/{kb_id}/upload")
@@ -66,25 +87,25 @@ async def upload_document(
     支持格式：PDF、Word(.docx)、Excel(.xlsx)、PPT(.pptx)、TXT
     上传后自动解析 → 分块 → 向量化
     """
-    kb = store.get_knowledge_base(kb_id)
-    if not kb:
-        raise HTTPException(status_code=404, detail="知识库不存在")
-
-    # 校验文件类型
-    filename = file.filename or "unknown.txt"
-    ext = os.path.splitext(filename)[1].lower()
-    supported = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md"}
-    if ext not in supported:
-        raise HTTPException(
-            status_code=400,
-            detail=f"不支持的文件格式: {ext}，支持: {', '.join(sorted(supported))}",
-        )
-
-    # 读取文件内容
-    content = await file.read()
-    file_size = len(content)
-
     try:
+        kb = store.get_knowledge_base(kb_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+
+        # 校验文件类型
+        filename = file.filename or "unknown.txt"
+        ext = os.path.splitext(filename)[1].lower()
+        supported = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md"}
+        if ext not in supported:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的文件格式: {ext}，支持: {', '.join(sorted(supported))}",
+            )
+
+        # 读取文件内容
+        content = await file.read()
+        file_size = len(content)
+
         # 1. 解析文档
         logger.info(f"[知识库] 开始解析: {filename} ({file_size} bytes)")
         text = extract_text(content, filename)
@@ -125,9 +146,15 @@ async def upload_document(
 @router.delete("/{kb_id}/documents/{doc_id}")
 async def delete_document(kb_id: str, doc_id: str):
     """删除文档"""
-    if not store.delete_document(kb_id, doc_id):
-        raise HTTPException(status_code=404, detail="文档不存在")
-    return {"status": "deleted", "kb_id": kb_id, "doc_id": doc_id}
+    try:
+        if not store.delete_document(kb_id, doc_id):
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return {"status": "deleted", "kb_id": kb_id, "doc_id": doc_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[知识库] 文档删除失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"文档删除失败: {str(e)}")
 
 
 # ==================== 检索 ====================
@@ -135,8 +162,14 @@ async def delete_document(kb_id: str, doc_id: str):
 @router.post("/{kb_id}/search")
 async def search_knowledge(kb_id: str, query: str = Form(...), top_k: int = Form(3)):
     """检索知识库中与 query 最相关的内容"""
-    kb = store.get_knowledge_base(kb_id)
-    if not kb:
-        raise HTTPException(status_code=404, detail="知识库不存在")
-    results = retrieve_context(query, kb_id, top_k=min(top_k, 10))
-    return {"kb_id": kb_id, "query": query, "results": results}
+    try:
+        kb = store.get_knowledge_base(kb_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        results = retrieve_context(query, kb_id, top_k=min(top_k, 10))
+        return {"kb_id": kb_id, "query": query, "results": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[知识库] 检索失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"知识库检索失败: {str(e)}")

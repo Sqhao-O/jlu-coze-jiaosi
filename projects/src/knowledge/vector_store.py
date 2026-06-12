@@ -8,12 +8,31 @@
 import json
 import logging
 import os
+import tempfile
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def _writable_dir(base_dir: str, subdir: str) -> str:
+    """返回可写目录路径：优先使用项目目录，不可写时降级到 /tmp"""
+    target = os.path.join(base_dir, subdir)
+    if os.path.isdir(target):
+        if os.access(target, os.W_OK):
+            return target
+    else:
+        try:
+            os.makedirs(target, exist_ok=True)
+            return target
+        except OSError:
+            pass
+    fallback = os.path.join(tempfile.gettempdir(), "vibe_coding", subdir)
+    os.makedirs(fallback, exist_ok=True)
+    logger.warning(f"[VectorStore] 项目目录不可写，降级到: {fallback}")
+    return fallback
 
 
 class VectorStore(ABC):
@@ -68,10 +87,11 @@ class InMemoryVectorStore(VectorStore):
 
     def __init__(self, persist_dir: Optional[str] = None):
         self._data: dict = {}  # chunk_id -> {embedding, metadata, content, kb_id}
-        self._persist_dir = persist_dir or os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            ".knowledge_vectors",
-        )
+        if persist_dir:
+            self._persist_dir = persist_dir
+        else:
+            _project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            self._persist_dir = _writable_dir(_project_dir, ".knowledge_vectors")
         self._load()
 
     def _persist_path(self) -> str:
