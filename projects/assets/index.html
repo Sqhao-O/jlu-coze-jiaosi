@@ -26,8 +26,12 @@
         .sidebar-title { font-size: 18px; font-weight: 700; }
         .sidebar-subtitle { font-size: 11px; color: var(--text-sidebar-muted); margin-top: 2px; }
 
-        .teacher-panel { padding: 16px; }
-        .teacher-panel h3 { font-size: 13px; color: var(--text-sidebar-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .teacher-panel { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .teacher-panel h3 { font-size: 13px; color: var(--text-sidebar-muted); margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+        .teacher-panel h3 .collapse-arrow { font-size: 10px; transition: transform 0.2s; }
+        .teacher-panel.collapsed h3 .collapse-arrow { transform: rotate(-90deg); }
+        .teacher-panel-body { overflow: hidden; transition: max-height 0.3s ease, opacity 0.2s ease; max-height: 600px; opacity: 1; }
+        .teacher-panel.collapsed .teacher-panel-body { max-height: 0; opacity: 0; }
         .form-group { margin-bottom: 10px; }
         .form-group label { display: block; font-size: 12px; color: var(--text-sidebar-muted); margin-bottom: 4px; }
         .form-row { display: flex; gap: 8px; }
@@ -140,7 +144,7 @@
         @media (max-width: 768px) { .sidebar { display: none; } }
 
         /* Knowledge panel */
-        .knowledge-panel { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .knowledge-panel { padding: 8px 16px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
         .knowledge-panel h3 { font-size: 13px; color: var(--text-sidebar-muted); margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
         .knowledge-panel h3 .collapse-arrow { font-size: 10px; transition: transform 0.2s; }
         .knowledge-panel.collapsed h3 .collapse-arrow { transform: rotate(-90deg); }
@@ -204,7 +208,8 @@
 
     <!-- 教师信息面板 -->
     <div class="teacher-panel">
-        <h3>备课参数</h3>
+        <h3 onclick="toggleTeacherPanel()">备课参数 <span class="collapse-arrow">▼</span></h3>
+        <div class="teacher-panel-body">
         <div class="form-group">
             <label>学科</label>
             <div class="combo-input" id="combo-subject">
@@ -265,11 +270,12 @@
                 </div>
             </div>
         </div>
+        </div>
     </div>
 
     <!-- 知识库面板 -->
     <div class="knowledge-panel" id="knowledgePanel" style="display:block;">
-        <h3 onclick="toggleKBPanel()">📚 知识库 <span class="collapse-arrow">▼</span></h3>
+        <h3 onclick="toggleKBPanel()">知识库 <span class="collapse-arrow">▼</span></h3>
         <div class="knowledge-panel-body">
             <div class="form-group">
                 <label>当前知识库</label>
@@ -870,6 +876,10 @@ function updateRAGHint() {
 
 function toggleKBPanel() {
     document.getElementById('knowledgePanel').classList.toggle('collapsed');
+}
+
+function toggleTeacherPanel() {
+    document.querySelector('.teacher-panel').classList.toggle('collapsed');
 }
 
 function toggleKBDocs() {
