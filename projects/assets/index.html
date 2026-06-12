@@ -147,15 +147,15 @@
         .kb-btn:hover { background: var(--bg-hover); }
         .kb-btn.danger { color: #e53e3e; }
         .kb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .kb-docs { margin-top: 10px; }
-        .kb-docs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .kb-docs-header label { font-size: 12px; color: var(--text-secondary); }
-        .kb-doc-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; font-size: 12px; border-radius: 4px; margin-bottom: 2px; }
-        .kb-doc-item:hover { background: var(--bg-hover); }
-        .kb-doc-item .doc-name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
-        .kb-doc-item .doc-info { color: var(--text-muted); font-size: 11px; }
-        .kb-doc-item .doc-del { cursor: pointer; color: #e53e3e; margin-left: 6px; font-size: 11px; }
-        .kb-upload-status { font-size: 11px; color: var(--accent); margin-top: 4px; }
+        .kb-docs { margin-top: 8px; }
+        .kb-docs-header { display: none; } /* 隐藏，改用下拉形式 */
+        .kb-docs-select { width: 100%; padding: 6px 10px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--text-sidebar); font-size: 12px; outline: none; }
+        .kb-docs-select:focus { border-color: var(--accent); }
+        .kb-docs-select option { background: #2a2a4a; color: #fff; padding: 4px; }
+        .kb-docs-select option:disabled { color: rgba(255,255,255,0.4); font-style: italic; }
+        .kb-docs-actions { display: flex; gap: 6px; margin-top: 6px; }
+        .kb-docs-actions .kb-btn { flex: 1; padding: 5px 8px; font-size: 11px; }
+        .kb-upload-status { font-size: 11px; color: var(--text-sidebar); margin-top: 4px; opacity: 0.8; }
         /* Create KB dialog */
         .kb-dialog-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .kb-dialog { background: white; border-radius: 12px; padding: 20px; width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
@@ -259,11 +259,13 @@
             <button class="kb-btn danger" onclick="deleteCurrentKB()" id="deleteKBBtn" disabled>🗑 删除</button>
         </div>
         <div class="kb-docs" id="kbDocs" style="display:none;">
-            <div class="kb-docs-header">
-                <label>文档列表</label>
+            <select class="kb-docs-select" id="kbDocSelect" onchange="onDocSelect()">
+                <option value="" disabled selected>-- 文档列表 --</option>
+            </select>
+            <div class="kb-docs-actions" id="kbDocsActions" style="display:none;">
                 <button class="kb-btn" onclick="triggerUpload()">📤 上传</button>
+                <button class="kb-btn danger" onclick="deleteCurrentDoc()">🗑 删除</button>
             </div>
-            <div id="kbDocList"></div>
             <input type="file" id="kbFileInput" style="display:none;" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md" onchange="uploadFile(event)">
         </div>
     </div>
@@ -796,6 +798,7 @@ function setStatus(text) {
 
 // ========== 知识库管理 ==========
 let currentKBId = '';
+let currentDocId = '';
 let kbListCache = [];
 
 async function loadKBList() {
@@ -820,6 +823,7 @@ async function loadKBList() {
 function onKBSelect() {
     const sel = document.getElementById('kbSelect');
     currentKBId = sel.value;
+    currentDocId = '';
     document.getElementById('deleteKBBtn').disabled = !currentKBId;
     if (currentKBId) {
         loadKBDocs(currentKBId);
@@ -832,23 +836,34 @@ async function loadKBDocs(kbId) {
     try {
         const resp = await fetch(`/api/knowledge-bases/${kbId}/documents`);
         const docs = await resp.json();
-        const container = document.getElementById('kbDocList');
         const docsSection = document.getElementById('kbDocs');
+        const docSelect = document.getElementById('kbDocSelect');
+        const docsActions = document.getElementById('kbDocsActions');
+        
         docsSection.style.display = 'block';
+        
+        // 构建下拉选项
+        let optionsHtml = '<option value="" disabled selected>-- 文档列表 --</option>';
         if (!docs.length) {
-            container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:4px 8px;">暂无文档</div>';
-            return;
+            optionsHtml += '<option value="" disabled>暂无文档</option>';
+        } else {
+            docs.forEach(d => {
+                const statusIcon = d.status === 'ready' ? '✓' : '⏳';
+                optionsHtml += `<option value="${d.id}">📄 ${d.filename} (${d.chunk_count}块 ${statusIcon})</option>`;
+            });
         }
-        container.innerHTML = docs.map(d => `
-            <div class="kb-doc-item">
-                <span class="doc-name" title="${d.filename}">📄 ${d.filename}</span>
-                <span class="doc-info">${d.chunk_count}块 ${d.status === 'ready' ? '✓' : '⏳'}</span>
-                <span class="doc-del" onclick="deleteDoc('${kbId}','${d.id}')" title="删除">✕</span>
-            </div>
-        `).join('');
+        docSelect.innerHTML = optionsHtml;
+        
+        // 有文档时显示操作按钮
+        docsActions.style.display = docs.length > 0 ? 'flex' : 'none';
     } catch (e) {
         console.error('加载文档列表失败', e);
     }
+}
+
+function onDocSelect() {
+    const docSelect = document.getElementById('kbDocSelect');
+    currentDocId = docSelect.value;
 }
 
 function showCreateKBDlg() {
@@ -938,7 +953,24 @@ async function deleteDoc(kbId, docId) {
     if (!confirm('确定删除此文档？')) return;
     try {
         await fetch(`/api/knowledge-bases/${kbId}/documents/${docId}`, { method: 'DELETE' });
+        currentDocId = '';
         await loadKBDocs(kbId);
+        await loadKBList();
+    } catch (e) {
+        alert('删除失败: ' + e.message);
+    }
+}
+
+async function deleteCurrentDoc() {
+    if (!currentDocId) {
+        alert('请先选择一个文档');
+        return;
+    }
+    if (!confirm('确定删除此文档？')) return;
+    try {
+        await fetch(`/api/knowledge-bases/${currentKBId}/documents/${currentDocId}`, { method: 'DELETE' });
+        currentDocId = '';
+        await loadKBDocs(currentKBId);
         await loadKBList();
     } catch (e) {
         alert('删除失败: ' + e.message);
