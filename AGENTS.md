@@ -51,6 +51,10 @@
 - **端口**: 5000
 - **预览能力**: 支持（Web 服务，`/` 返回前端页面）
 - **部署方式**: HTTP 服务部署（`deploy.profile.kind=service, flavor=web`）
+- **预览判定依据**: FastAPI HTTP 服务 + 前端页面，核心交互需通过浏览器验证，属于 Web 预览型项目
+- **预览链路**: `[dev].build` → `setup.sh`（uv sync 安装依赖）→ `[dev].run` → `http_run.sh`（清理端口 → 激活 .venv → 启动 uvicorn）
+- **.coze 映射**: 根 `.coze`（`/workspace/projects/.coze`）通过 `projects/scripts/` 相对路径调度子项目脚本；子项目 `.coze`（`projects/.coze`）使用 `scripts/` 相对路径；两边 `[dev]`/`[deploy]` 命令实际指向同一套脚本，仅路径前缀不同
+- **沙箱重置注意**: 每次新会话 `.venv` 会被清除，预览启动时 `[dev].build` 会自动重新安装依赖，无需手动处理
 
 ## 架构设计
 
