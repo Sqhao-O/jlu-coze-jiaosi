@@ -43,6 +43,7 @@ class LessonPrepState(TypedDict, total=False):
     _blind_spot_json: str     # 盲区检测 JSON（blind_spot 生成）
     _student_sim_json: str    # 学情推演 JSON（student_sim 生成）
     _interaction_json: str    # 互动设计 JSON（interaction_design 生成）
+    _exam_json: str           # 试题 JSON（exam_gen 生成）
 
     # --- PPT 生成 ---
     ppt_download_url: str     # PPT 下载链接（ppt_gen 模式）
@@ -58,13 +59,15 @@ class WorkflowMode:
     BLIND_SPOT = "blind_spot"                # 盲区检测
     STUDENT_SIM = "student_sim"              # 学情推演
     INTERACTION_DESIGN = "interaction_design" # 互动设计
+    EXAM_GEN = "exam_gen"                    # 智能命题
     PPT_GEN = "ppt_gen"                      # PPT 生成
     CHAT = "chat"                            # 闲聊
 
     @classmethod
     def all_modes(cls):
         return [cls.LESSON_PREP, cls.CLASSROOM_SIM, cls.BLIND_SPOT,
-                cls.STUDENT_SIM, cls.INTERACTION_DESIGN, cls.CHAT]
+                cls.STUDENT_SIM, cls.INTERACTION_DESIGN, cls.EXAM_GEN,
+                cls.CHAT]
 
     @classmethod
     def is_functional(cls, mode: str) -> bool:

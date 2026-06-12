@@ -118,6 +118,7 @@ MODE_NODE_MAP = {
     WorkflowMode.BLIND_SPOT:        "detect_blindspots",
     WorkflowMode.STUDENT_SIM:       "simulate_students",
     WorkflowMode.INTERACTION_DESIGN: "design_interactions",
+    WorkflowMode.EXAM_GEN:          "generate_exam",
     WorkflowMode.PPT_GEN:           "generate_ppt",
 }
 
@@ -574,7 +575,128 @@ def node_design_interactions(state: LessonPrepState) -> dict:
 
 
 # ============================================================
-# 节点7: PPT 生成（调用 Coze Doc Maker 工作流）
+# 节点7: 智能命题
+# ============================================================
+
+EXAM_GEN_SYSTEM_PROMPT = """你是资深命题专家，擅长根据教学目标和重难点设计高质量试题。你的任务是为这节课生成一套完整的结构化试题。
+
+## 输出要求
+严格按以下 JSON 结构输出，不要遗漏任何字段，不要输出 markdown 代码块：
+
+{
+  "lesson_context": {
+    "subject": "学科",
+    "topic": "课题",
+    "grade": "年级"
+  },
+  "exam_meta": {
+    "total_score": 100,
+    "suggested_duration": 45,
+    "difficulty_ratio": {
+      "basic": "60%",
+      "advanced": "30%",
+      "challenge": "10%"
+    }
+  },
+  "questions": [
+    {
+      "type": "choice",
+      "difficulty": "basic",
+      "score": 4,
+      "stem": "题干文本",
+      "options": ["选项A", "选项B", "选项C", "选项D"],
+      "answer": "A",
+      "explanation": "解析"
+    },
+    {
+      "type": "fill_blank",
+      "difficulty": "basic",
+      "score": 4,
+      "stem": "题干文本，空格用____标注",
+      "answer": "标准答案",
+      "explanation": "解析"
+    },
+    {
+      "type": "true_false",
+      "difficulty": "basic",
+      "score": 3,
+      "stem": "判断题题干",
+      "answer": "正确",
+      "explanation": "解析"
+    },
+    {
+      "type": "short_answer",
+      "difficulty": "advanced",
+      "score": 8,
+      "stem": "简答题题干",
+      "answer": "参考答案",
+      "scoring_points": ["要点1（x分）", "要点2（x分）", "要点3（x分）"],
+      "explanation": "解析"
+    },
+    {
+      "type": "applied",
+      "difficulty": "challenge",
+      "score": 12,
+      "stem": "应用题/计算题题干",
+      "answer": "参考答案及解题过程",
+      "scoring_points": ["步骤1（x分）", "步骤2（x分）", "步骤3（x分）"],
+      "explanation": "解析"
+    }
+  ],
+  "difficulty_summary": {
+    "basic_score": 60,
+    "basic_pct": "60%",
+    "advanced_score": 30,
+    "advanced_pct": "30%",
+    "challenge_score": 10,
+    "challenge_pct": "10%"
+  },
+  "exam_tips": "命题建议与使用提示"
+}
+
+## 规则
+1. 选择题至少 4 道，填空题至少 3 道，判断题至少 3 道，简答题至少 2 道，应用题至少 1 道
+2. 题目必须紧扣教师提供的学科、年级、重点、难点和教学目标
+3. 难度分布约为基础60%、提高30%、挑战10%
+4. 选择题的 4 个选项须有一定迷惑性，不能有明显错误选项
+5. 题目之间不得重复考查同一知识点
+6. 简答题和应用题的评分要点必须具体到分值分配
+7. 各题分值之和必须等于 total_score
+8. 基于教师提供的学科、年级、教学风格进行针对性命题
+9. 判断题的 answer 只能是"正确"或"错误"
+"""
+
+
+def node_generate_exam(state: LessonPrepState) -> dict:
+    """智能命题：生成结构化试题"""
+    ctx = request_context.get() or new_context(method="exam_gen.generate")
+    logger.info("[智能命题] 开始")
+
+    from coze_coding_dev_sdk import LLMClient
+    client = LLMClient(ctx=ctx)
+
+    params = _extract_teacher_params(state)
+    params["topic"] = _resolve_topic(state)
+    user_content = _build_user_content(params, "生成一套完整的结构化试题")
+
+    messages = [
+        SystemMessage(content=EXAM_GEN_SYSTEM_PROMPT),
+        HumanMessage(content=user_content),
+    ]
+
+    response = client.invoke(messages=messages, **get_llm_params("creative"))
+    result = parse_json(response, default=None, log_context="[智能命题]")
+
+    if result is None:
+        logger.warning("[智能命题] JSON 解析失败，使用原始文本")
+        result = {"lesson_context": {"topic": params["topic"]}, "raw_text": response}
+
+    logger.info("[智能命题] 完成")
+    return {"_exam_json": json.dumps(result, ensure_ascii=False)}
+
+
+# ============================================================
+# 节点8: PPT 生成（调用 Coze Doc Maker 工作流）
 # ============================================================
 
 import asyncio
@@ -689,6 +811,18 @@ FIELD_NAMES = {
     "output": "产出", "quick_check": "即时评估", "method": "方法",
     "pass_criteria": "通过标准", "transition_script": "过渡话术",
     "icebreaker": "破冰", "overall_tips": "总体建议",
+    # 智能命题
+    "exam_meta": "试卷信息", "total_score": "总分",
+    "suggested_duration": "建议时长", "difficulty_ratio": "难度比例",
+    "questions": "试题列表", "stem": "题干", "options": "选项",
+    "answer": "答案", "explanation": "解析", "scoring_points": "评分要点",
+    "difficulty_summary": "难度分布", "basic_score": "基础题分值",
+    "basic_pct": "基础题占比", "advanced_score": "提高题分值",
+    "advanced_pct": "提高题占比", "challenge_score": "挑战题分值",
+    "challenge_pct": "挑战题占比", "exam_tips": "命题建议",
+    "choice": "选择题", "fill_blank": "填空题", "true_false": "判断题",
+    "short_answer": "简答题", "applied": "应用题",
+    "basic": "基础", "advanced": "提高", "challenge": "挑战",
     # 通用
     "lesson_context": "课程信息",
 }
@@ -987,6 +1121,107 @@ def _format_interaction_design(data: dict) -> str:
     return "\n".join(md)
 
 
+def _format_exam(data: dict) -> str:
+    """格式化智能命题输出"""
+    md = []
+    ctx = data.get("lesson_context", {})
+    title = ctx.get("topic", "智能命题")
+    meta = data.get("exam_meta", {})
+    total_score = meta.get("total_score", 100)
+    suggested_duration = meta.get("suggested_duration", 45)
+
+    md.append(f"# 📝 智能命题：{title}\n")
+
+    info_parts = []
+    if ctx.get("subject"):
+        info_parts.append(f"**学科**：{ctx['subject']}")
+    if ctx.get("grade"):
+        info_parts.append(f"**年级**：{ctx['grade']}")
+    info_parts.append(f"**建议时长**：{suggested_duration}分钟")
+    info_parts.append(f"**总分**：{total_score}分")
+    md.append(" | ".join(info_parts) + "\n")
+    md.append("---\n")
+
+    # 按题型分组
+    TYPE_ORDER = ["choice", "fill_blank", "true_false", "short_answer", "applied"]
+    TYPE_NAMES = {
+        "choice": "选择题",
+        "fill_blank": "填空题",
+        "true_false": "判断题",
+        "short_answer": "简答题",
+        "applied": "应用题",
+    }
+    DIFFICULTY_ICON = {
+        "basic": "🟢",
+        "advanced": "🟡",
+        "challenge": "🔴",
+    }
+
+    questions = data.get("questions", [])
+
+    for q_type in TYPE_ORDER:
+        type_questions = [q for q in questions if q.get("type") == q_type]
+        if not type_questions:
+            continue
+
+        type_name = TYPE_NAMES.get(q_type, q_type)
+        type_score = sum(q.get("score", 0) for q in type_questions)
+        per_score = type_questions[0].get("score", 0) if type_questions else 0
+
+        md.append(f"## {type_name}（每题{per_score}分，共{type_score}分）\n")
+
+        for i, q in enumerate(type_questions, 1):
+            difficulty = q.get("difficulty", "basic")
+            diff_icon = DIFFICULTY_ICON.get(difficulty, "")
+            md.append(f"**{i}.** {diff_icon} {q.get('stem', '')}")
+
+            # 选择题选项
+            if q_type == "choice":
+                options = q.get("options", [])
+                if options:
+                    labels = ["A", "B", "C", "D", "E", "F"]
+                    opt_lines = []
+                    for j, opt in enumerate(options):
+                        opt_lines.append(f"   {labels[j]}. {opt}")
+                    md.append("\n".join(opt_lines))
+
+            # 答案
+            answer = q.get("answer", "")
+            if answer:
+                md.append(f"\n**答案**：{answer}")
+
+            # 评分要点（简答题/应用题）
+            scoring_points = q.get("scoring_points", [])
+            if scoring_points:
+                md.append("\n**评分要点**：")
+                for sp in scoring_points:
+                    md.append(f"- {sp}")
+
+            # 解析
+            explanation = q.get("explanation", "")
+            if explanation:
+                md.append(f"\n**解析**：{explanation}")
+
+            md.append("")
+
+    # 难度分布
+    summary = data.get("difficulty_summary", {})
+    if summary:
+        md.append("---\n")
+        md.append("### 难度分布\n")
+        md.append(f"- **基础题**：{summary.get('basic_score', '?')}分（{summary.get('basic_pct', '?')}）")
+        md.append(f"- **提高题**：{summary.get('advanced_score', '?')}分（{summary.get('advanced_pct', '?')}）")
+        md.append(f"- **挑战题**：{summary.get('challenge_score', '?')}分（{summary.get('challenge_pct', '?')}）")
+        md.append("")
+
+    # 命题建议
+    tips = data.get("exam_tips", "")
+    if tips:
+        md.append(f"> 💡 **命题建议**：{tips}")
+
+    return "\n".join(md)
+
+
 # 格式化器注册表
 FORMATTERS = {
     WorkflowMode.LESSON_PREP:        _format_lesson_plan,
@@ -994,6 +1229,7 @@ FORMATTERS = {
     WorkflowMode.BLIND_SPOT:         _format_blind_spot,
     WorkflowMode.STUDENT_SIM:        _format_student_sim,
     WorkflowMode.INTERACTION_DESIGN: _format_interaction_design,
+    WorkflowMode.EXAM_GEN:           _format_exam,
 }
 
 # 各模式读取的中间数据字段
@@ -1003,6 +1239,7 @@ MODE_DATA_FIELD = {
     WorkflowMode.BLIND_SPOT:         "_blind_spot_json",
     WorkflowMode.STUDENT_SIM:        "_student_sim_json",
     WorkflowMode.INTERACTION_DESIGN: "_interaction_json",
+    WorkflowMode.EXAM_GEN:           "_exam_json",
     WorkflowMode.PPT_GEN:            "_ppt_result_json",
 }
 
@@ -1068,6 +1305,7 @@ def build_lesson_prep_graph() -> StateGraph:
     builder.add_node("detect_blindspots", node_detect_blindspots)
     builder.add_node("simulate_students", node_simulate_students)
     builder.add_node("design_interactions", node_design_interactions)
+    builder.add_node("generate_exam", node_generate_exam)
     builder.add_node("generate_ppt", node_generate_ppt)
     builder.add_node("format_output", node_format_output)
 

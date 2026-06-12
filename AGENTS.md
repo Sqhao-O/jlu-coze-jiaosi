@@ -1,7 +1,7 @@
 ## 项目概述
 - **名称**: vibe-coding
 - **类型**: Web 服务（FastAPI HTTP 服务 + 前端页面）
-- **描述**: 教思 AI 教学助手——课堂沙盘推演器，提供教案生成、课堂预演、盲区检测、学情推演、互动设计等「替老师思考」能力
+- **描述**: 教思 AI 教学助手——课堂沙盘推演器，提供教案生成、课堂预演、盲区检测、学情推演、互动设计、智能命题等「替老师思考」能力
 
 ## 技术栈
 - **语言**: Python 3.12
@@ -66,6 +66,7 @@ intent_router → [chat] → chat_reply → format_output
              → [blind_spot] → detect_blindspots → format_output
              → [student_sim] → simulate_student_profiles → format_output
              → [interaction_design] → design_interactions → format_output
+             → [exam_gen] → generate_exam → format_output
              → [ppt_gen] → generate_ppt → format_output
 ```
 - **intent_router**: 根据 `mode` 字段路由到对应功能节点，`mode` 由前端显式传入
@@ -81,6 +82,7 @@ intent_router → [chat] → chat_reply → format_output
 | `blind_spot` | detect_blindspots | 发现教案中的逻辑漏洞与认知跳步 |
 | `student_sim` | simulate_student_profiles | 模拟优/中/困三层学生思维路径 |
 | `interaction_design` | design_interactions | 设计师生互动方案和话术 |
+| `exam_gen` | generate_exam | 一键生成结构化试题（多题型+分层难度+答案评分标准） |
 | `ppt_gen` | generate_ppt | 调用 Coze Doc Maker 生成教学课件 PPT |
 | `chat` | chat_reply | 自由对话 |
 
