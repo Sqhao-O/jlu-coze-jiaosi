@@ -1,1190 +1,1288 @@
 # 「教思」AI 教学孪生系统
 
-> 基于 LangGraph 多智能体工作流的 AI 教学辅助平台，覆盖智能备课、教学推演、成长分析三大核心场景。
+> **教思 — 教之以思，而非教之以器**
+>
+> 基于 LangGraph StateGraph 的 AI 教学辅助平台，为教师提供智能备课、课堂预演、学情推演、互动设计、智能命题、PPT 大纲等一站式教学支持。
 
 ---
 
 ## 目录
 
 1. [系统架构](#1-系统架构)
-2. [技术栈](#2-技术栈)
-3. [目录结构](#3-目录结构)
-4. [核心模块实现](#4-核心模块实现)
-   - [4.1 HTTP 服务层 (`main.py`)](#41-http-服务层-mainpy)
-   - [4.2 全局状态定义 (`graphs/state.py`)](#42-全局状态定义-graphsstatepy)
-   - [4.3 工作流路由 (`graphs/graph.py`)](#43-工作流路由-graphsgraphpy)
-   - [4.4 智能备课 (`graphs/lesson_prep.py`)](#44-智能备课-graphslesson_preppy)
-   - [4.5 教学推演 (`graphs/teaching_simulation.py`)](#45-教学推演-graphsteaching_simulationpy)
-   - [4.6 成长分析 (`graphs/growth_analysis.py`)](#46-成长分析-graphsgrowth_analysispy)
-   - [4.7 主控 Agent (`agents/agent.py`)](#47-主控-agent-agentsagentpy)
-   - [4.8 存储层 (`storage/`)](#48-存储层-storage)
-   - [4.9 JSON→Markdown 格式化引擎](#49-jsonmarkdown-格式化引擎)
-   - [4.10 前端聊天界面 (`assets/index.html`)](#410-前端聊天界面-assetsindexhtml)
-5. [API 接口规范](#5-api-接口规范)
-6. [完整数据流](#6-完整数据流)
-7. [运行与部署](#7-运行与部署)
-8. [配置体系](#8-配置体系)
-9. [开发降级方案](#9-开发降级方案)
-10. [常见问题](#10-常见问题)
+2. [项目目录结构](#2-项目目录结构)
+3. [核心模块详解](#3-核心模块详解)
+   - [3.1 HTTP 服务层 (`main.py`)](#31-http-服务层-mainpy)
+   - [3.2 工作流引擎 (`graphs/`)](#32-工作流引擎-graphs)
+   - [3.3 知识库系统 (`knowledge/`)](#33-知识库系统-knowledge)
+   - [3.4 存储层 (`storage/`)](#34-存储层-storage)
+   - [3.5 配置与工具 (`config/` `utils/` `tools/`)](#35-配置与工具-config-utils-tools)
+   - [3.6 API 路由 (`api/`)](#36-api-路由-api)
+4. [API 接口规范](#4-api-接口规范)
+5. [运行与部署](#5-运行与部署)
+6. [技术栈清单](#6-技术栈清单)
+7. [开发指南](#7-开发指南)
 
 ---
 
 ## 1. 系统架构
 
+### 1.1 整体架构图
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                         用户交互层                                 │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────────┐ │
-│  │ 前端聊天界面  │  │ API 文档 /docs│  │ OpenAI 兼容接口 /v1/...  │ │
-│  │ (HTML/CSS/JS)│  │ (Swagger UI) │  │ (第三方客户端接入)        │ │
-│  └──────┬──────┘  └──────┬───────┘  └────────────┬─────────────┘ │
-└─────────┼────────────────┼───────────────────────┼───────────────┘
-          │                │                       │
-          ▼                ▼                       ▼
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐  │
+│  │ 前端聊天界面       │  │  Swagger UI      │  │ OpenAI 兼容接口 │  │
+│  │ (HTML/CSS/JS)     │  │  (/docs)         │  │ /v1/chat/...   │  │
+│  └────────┬─────────┘  └────────┬─────────┘  └───────┬────────┘  │
+└───────────┼─────────────────────┼────────────────────┼───────────┘
+            │                     │                    │
+            ▼                     ▼                    ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                      HTTP 服务层 (FastAPI + Uvicorn)               │
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │  main.py                                                     │ │
-│  │  ├─ GraphService: 工作流执行引擎 (run / stream_run / async)   │ │
-│  │  ├─ OpenAIChatHandler: OpenAI 协议适配                       │ │
-│  │  ├─ format_teaching_content(): JSON→Markdown 规则引擎         │ │
-│  │  └─ 静态文件挂载: assets/index.html                          │ │
-│  └──────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────┘
-          │
-          ▼
+│                   HTTP 服务层 (FastAPI + Uvicorn)                  │
+│                                                                  │
+│  GraphService — 工作流执行引擎                                     │
+│  ├─ run()            同步执行 (graph.ainvoke)                     │
+│  ├─ stream_sse()     SSE 流式执行 (graph.astream)                 │
+│  ├─ run_node()       单节点调试                                    │
+│  └─ cancel_run()     取消运行                                     │
+│                                                                  │
+│  API 路由                                                        │
+│  ├─ /v1/chat/completions    OpenAI 兼容对话接口                    │
+│  ├─ /api/teacher-config     教师配置选项                           │
+│  ├─ /api/knowledge-bases/*  知识库 CRUD + 上传 + 检索              │
+│  ├─ /run  /stream_run       内部执行接口                           │
+│  └─ /health                 健康检查                              │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │
+                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                    工作流编排层 (LangGraph)                        │
-│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐  │
-│  │ 智能备课 (11节点) │ │ 教学推演 (12节点) │ │ 成长分析 (12节点) │  │
-│  │ lesson_prep.py   │ │ teaching_        │ │ growth_analysis  │  │
-│  │                  │ │ simulation.py    │ │ .py              │  │
-│  └────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘  │
-│           │                    │                    │             │
-│           └────────────────────┼────────────────────┘             │
-│                                ▼                                  │
-│                    ┌──────────────────────┐                       │
-│                    │   graphs/graph.py    │                       │
-│                    │   工作流路由 + 图编译  │                       │
-│                    └──────────────────────┘                       │
-└──────────────────────────────────────────────────────────────────┘
-          │
-          ▼
+│                  工作流编排层 (LangGraph StateGraph)               │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐   │
+│  │  lesson_prep.py — 多功能工作流 (唯一活跃工作流)              │   │
+│  │                                                           │   │
+│  │  intent_router → rag_enrich → {功能节点} → format_output   │   │
+│  │                                                           │   │
+│  │  8 种功能模式:                                              │   │
+│  │  📋教案生成  🎭课堂预演  🔍盲区检测  👥学情推演              │   │
+│  │  💬互动设计  📝智能命题  📊PPT大纲   🗨️自由对话              │   │
+│  └───────────────────────────────────────────────────────────┘   │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │
+                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                     基础设施层                                     │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌───────────────┐ │
-│  │ LLM Client │ │ 状态管理    │ │ 存储层      │ │ 工具基础设施   │ │
-│  │ (扣子SDK)  │ │ (StateGraph│ │ PostgreSQL  │ │ RAG检索       │ │
-│  │            │ │  + 检查点)  │ │ / SQLite    │ │ 变量管理      │ │
-│  └────────────┘ └────────────┘ └────────────┘ └───────────────┘ │
+│                        基础设施层                                  │
+│                                                                  │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌──────────────┐  │
+│  │ LLM 客户端  │ │ 状态管理    │ │ 存储层      │ │ 知识库系统    │  │
+│  │            │ │            │ │            │ │              │  │
+│  │ LLMClient  │ │ StateGraph │ │ PostgreSQL │ │ 文档解析     │  │
+│  │ (扣子 SDK) │ │ TypedDict  │ │ / SQLite   │ │ PDF/Word/    │  │
+│  │            │ │ Annotated  │ │            │ │ Excel/PPT    │  │
+│  │ Embedding  │ │            │ │ AsyncPG    │ │              │  │
+│  │ Client     │ │ 条件路由    │ │ Saver      │ │ 文本分块     │  │
+│  │            │ │            │ │ /Memory    │ │ 向量化       │  │
+│  │ 模型:      │ │ Checkpoint │ │ Saver      │ │ 语义检索     │  │
+│  │ doubao-    │ │            │ │            │ │              │  │
+│  │ seed-pro   │ │            │ │ S3 存储    │ │ 元数据管理   │  │
+│  │ /lite      │ │            │ │            │ │              │  │
+│  └────────────┘ └────────────┘ └────────────┘ └──────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 架构设计原则
+### 1.2 请求数据流
+
+```
+用户输入（前端 / API / OpenAI 客户端）
+    │
+    ▼
+┌────────────────────────────────────────────┐
+│ FastAPI 路由层                              │
+│ ├─ 解析请求体                               │
+│ ├─ 创建请求上下文 (new_context)              │
+│ ├─ 提取 session_id / mode / extra_body      │
+│ └─ 构建 stream_input: {messages, mode,      │
+│       lesson_subject, lesson_grade, ...}    │
+└──────────────────┬─────────────────────────┘
+                   │
+                   ▼
+┌────────────────────────────────────────────┐
+│ GraphService                                │
+│ ├─ 获取编译后的 StateGraph (懒加载 + 缓存)    │
+│ ├─ 设置 thread_id + recursion_limit=50      │
+│ ├─ 注入 checkpointer (状态持久化)            │
+│ └─ graph.astream(input, stream_mode=        │
+│       ["messages", "updates"])              │
+└──────────────────┬─────────────────────────┘
+                   │
+                   ▼
+┌────────────────────────────────────────────┐
+│ LangGraph 工作流执行 (3 节点)                │
+│                                             │
+│ ① intent_router:  确定 mode → intent        │
+│ ② rag_enrich:     知识库检索 + 上下文注入    │
+│ ③ {功能节点}:     LLM 生成结构化 JSON       │
+│ ④ format_output:  JSON → Markdown 格式化    │
+└──────────────────┬─────────────────────────┘
+                   │
+                   ▼
+┌────────────────────────────────────────────┐
+│ 响应输出                                     │
+│ ├─ SSE:         实时推送 + 节点进度          │
+│ ├─ JSONResponse: OpenAI 兼容格式            │
+│ └─ Dict:        内部 API 原始结果            │
+└────────────────────────────────────────────┘
+```
+
+### 1.3 架构设计原则
 
 | 原则 | 实现 |
 |------|------|
-| **工作流即代码** | 每个教学场景封装为独立的 LangGraph StateGraph，节点函数纯 Python |
-| **状态驱动** | 全局 `TeachingState` 通过 LangGraph 的 `TypedDict + Annotated` 机制在各节点间自动合并传递 |
-| **协议兼容** | 通过 `OpenAIChatHandler` 将内部 LangGraph 流适配为 OpenAI `/v1/chat/completions` 格式 |
-| **降级优先** | 开发环境自动降级（PostgreSQL→SQLite, PostgresSaver→MemorySaver），零配置启动 |
+| **单一工作流** | 全部功能集成在 1 个 StateGraph 中，根据 `mode` 字段路由到不同功能节点 |
+| **状态驱动** | `LessonPrepState` 通过 `TypedDict + Annotated` 在各节点间自动合并传递 |
+| **意图路由** | 前端显式传入 `mode` → 后端关键词降级 → 条件边路由 |
+| **RAG 增强** | 所有功能模式共享统一的 `rag_enrich` 节点，知识库上下文注入 System Prompt |
+| **格式分离** | LLM 生成 JSON → `format_output` 统一转 Markdown，关注点分离 |
+| **协议兼容** | 内置 OpenAI `/v1/chat/completions` 兼容接口 |
+| **降级优先** | 开发环境自动降级：PostgreSQL→SQLite, PostgresSaver→MemorySaver, 向量DB→内存 |
 
 ---
 
-## 2. 技术栈
-
-| 类别 | 技术 | 版本 | 用途 |
-|------|------|------|------|
-| **语言** | Python | 3.12 | 主语言 |
-| **Web 框架** | FastAPI | 0.115+ | HTTP 路由、中间件、OpenAPI 文档 |
-| **ASGI 服务器** | Uvicorn | 0.34+ | 生产级异步 HTTP 服务 |
-| **工作流引擎** | LangGraph | 0.6+ | StateGraph 有向图编排、条件路由、并行 Send |
-| **LLM 调用** | coze-coding-dev-sdk | latest | 扣子平台 LLM Client，支持流式/非流式/思考模式 |
-| **LLM 集成** | LangChain | 0.3+ | 消息类型（SystemMessage/HumanMessage）、工具定义 |
-| **数据库 ORM** | SQLAlchemy | 2.0+ | 数据库引擎管理、连接池 |
-| **数据库** | PostgreSQL / SQLite | 16+ / 3.x | 生产用 PG，开发降级 SQLite |
-| **依赖管理** | uv | 0.5+ | Python 包管理、虚拟环境 |
-| **前端渲染** | marked.js | 15+ | Markdown→HTML 解析 |
-| **代码高亮** | highlight.js | 11+ | 代码块语法着色 |
-| **前端** | 原生 HTML/CSS/JS | — | 零框架依赖，单文件 1500+ 行 |
-| **序列化** | JSON | — | 工作流节点间数据交换格式 |
-| **配置** | TOML | — | `.coze` 部署/预览配置 |
-
----
-
-## 3. 目录结构
+## 2. 项目目录结构
 
 ```
-projects/                          # 技术项目根目录
-├── .coze                          # 子项目配置（sub_id, name, project_type）
-├── README.md                      # 本文档
-├── pyproject.toml                 # Python 项目元数据 + 依赖声明
+projects/
+├── .coze                          # 平台项目配置 (sub_id, name, project_type)
+├── pyproject.toml                 # Python 依赖声明 + uv 配置
 ├── uv.lock                        # uv 依赖锁文件
 │
 ├── src/                           # 源码根目录
-│   ├── main.py                    # ★ HTTP 服务入口 + GraphService + 格式化引擎
+│   ├── main.py                    # ★ HTTP 服务入口 (670 行)
 │   │
-│   ├── graphs/                    # LangGraph 工作流定义
-│   │   ├── __init__.py            # 包初始化
-│   │   ├── graph.py               # ★ 工作流路由：根据 workflow 参数分发到不同子图
-│   │   ├── state.py               # ★ 全局状态定义（TeachingState + 3 个工作流 State）
-│   │   ├── lesson_prep.py         # ★ 智能备课：11 节点 StateGraph
-│   │   ├── teaching_simulation.py # ★ 教学推演：12 节点 + 3 路并行 Send
-│   │   ├── growth_analysis.py     # ★ 成长分析：12 节点 StateGraph
-│   │   └── nodes/                 # 共享节点函数（工具调用等）
+│   ├── graphs/                    # LangGraph 工作流
+│   │   ├── __init__.py            # Graph 包装器 → 编译入口
+│   │   ├── graph.py               # compile_graph() 编译函数
+│   │   ├── state.py               # ★ 状态定义 — LessonPrepState + WorkflowMode
+│   │   └── lesson_prep.py         # ★ 多功能工作流 (1500 行)
+│   │                              #   intent_router → rag_enrich → 8个功能节点 → format_output
 │   │
-│   ├── agents/                    # LangChain Agent 定义
-│   │   └── agent.py               # 主控 Agent：意图识别 + 5 个教学 Tool
+│   ├── knowledge/                 # 知识库核心
+│   │   ├── parser.py              # 文档解析 (PDF/Word/Excel/PPT/TXT)
+│   │   ├── chunker.py             # 文本分块 (段落感知 + 滑动窗口)
+│   │   ├── embedder.py            # 向量化 + 语义检索
+│   │   ├── vector_store.py        # VectorStore 抽象 + InMemoryVectorStore
+│   │   └── store.py               # 知识库/文档元数据管理 (JSON 文件)
 │   │
-│   ├── tools/                     # 工具基础设施
-│   │   └── utility_tools.py       # RAG 检索、变量管理、提示词加载
+│   ├── api/
+│   │   └── knowledge.py           # 知识库 REST API (CRUD + 上传 + 检索)
 │   │
 │   ├── storage/                   # 存储层
 │   │   ├── database/
-│   │   │   └── db.py              # 数据库引擎（PG 主 + SQLite 降级）
-│   │   └── memory/
-│   │       └── memory_saver.py    # 状态检查点（PostgresSaver + MemorySaver 降级）
+│   │   │   ├── db.py              # ★ 数据库引擎 (PG 主 + SQLite 降级 + 重试)
+│   │   │   └── shared/model.py    # SQLAlchemy Base
+│   │   ├── memory/
+│   │   │   └── memory_saver.py    # ★ 状态检查点 (AsyncPostgresSaver + MemorySaver)
+│   │   └── s3/
+│   │       └── s3_storage.py      # S3 对象存储 (上传/下载/分片/签名URL)
 │   │
-│   └── utils/                     # 工具模块
-│       ├── helper.py              # 运行配置辅助（init_run_config 等）
-│       └── log/
-│           ├── __init__.py
-│           └── loop_trace.py      # Agent/Graph 配置初始化
+│   ├── config/
+│   │   └── llm_config.py          # LLM 配置 (3种预设 + 模型常量 + 阈值)
+│   │
+│   ├── tools/
+│   │   └── utility_tools.py       # 工具集 (提示词管理/RAG检索/格式化辅助)
+│   │
+│   ├── utils/
+│   │   ├── helper.py              # graph_helper 代理
+│   │   ├── json_parser.py         # ★ 统一 JSON 解析 (容错/清洗/Markdown清理)
+│   │   ├── ppt_client.py          # Coze PPT 工作流客户端
+│   │   ├── file/file.py           # 通用文件操作
+│   │   └── log/loop_trace.py      # 循环追踪配置
+│   │
+│   ├── agents/                    # (备用) LangChain Agent 模式
+│   │   ├── agent.py               # 主控 Agent + 5 个教学 Tool
+│   │   └── prompts.py             # 6 个专业 Agent 提示词模板
+│   │
+│   └── __init__.py
 │
 ├── assets/                        # 静态资源
-│   └── index.html                 # ★ 前端聊天界面（1500+ 行单文件）
+│   ├── index.html                 # 前端聊天界面
+│   └── logo.png
 │
 ├── config/                        # 配置文件
-│   ├── agent_llm_config.json      # LLM 模型配置（模型名、temperature、timeout）
-│   └── prompts/                   # 提示词模板目录
+│   ├── agent_llm_config.json      # Agent LLM 配置 (备用)
+│   └── prompts/                   # 6 个专业提示词模板文件
+│       ├── teaching_mirror.txt
+│       ├── learning_insight.txt
+│       ├── strategy_sandbox.txt
+│       ├── classroom_co.txt
+│       ├── growth_tracker.txt
+│       └── student_simulator.txt
 │
 └── scripts/                       # 运行脚本
-    ├── setup.sh                   # 依赖安装（uv sync）
-    └── http_run.sh                # ★ HTTP 服务启动（设置 DEV_MODE + 激活 venv）
+    ├── setup.sh                   # 依赖安装 (uv sync)
+    ├── http_run.sh                # HTTP 服务启动 (含环境检测)
+    ├── local_run.sh               # 本地调试运行
+    ├── pack.sh                    # 依赖锁定 (uv lock)
+    ├── load_env.sh                # 环境变量加载
+    └── load_env.py                # 平台环境变量注入
 ```
 
 ---
 
-## 4. 核心模块实现
+## 3. 核心模块详解
 
-### 4.1 HTTP 服务层 (`main.py`)
+### 3.1 HTTP 服务层 (`main.py`)
 
-**文件**: `src/main.py`（约 950 行）
+**文件位置**: `src/main.py`（670 行）
 
-#### 4.1.1 GraphService 类
+#### 3.1.1 GraphService — 工作流执行引擎
 
-核心工作流执行引擎，封装 LangGraph 的调用生命周期：
+整个系统的核心调度类，封装 LangGraph 的完整调用生命周期。
 
 ```python
 class GraphService:
-    def __init__(self):
-        self._graph = None           # 懒加载的 CompiledStateGraph
-        self._checkpointer = None    # 状态检查点实例
+    """
+    工作流执行引擎 — 单例管理 CompiledStateGraph 的懒加载、执行和生命周期。
+
+    三种执行模式:
+      run()        — 同步执行，await graph.ainvoke() → 完整 Dict
+      stream_sse() — SSE 流式，async for graph.astream() → AsyncGenerator[str]
+      run_node()   — 单节点调试，graph.ainvoke(debug=False)
+    """
 
     def _get_graph(self, ctx):
-        """懒加载 + 缓存编译后的图"""
-        if self._graph is None:
-            raw_graph = Graph(workflow="lesson_prep").builder
-            checkpointer = get_checkpointer()
-            self._graph = raw_graph.compile(checkpointer=checkpointer)
-        return self._graph
-
-    async def run(self, payload, ctx):
-        """同步执行：await graph.ainvoke()，返回完整结果"""
-        ...
-
-    async def stream_run(self, payload, ctx):
-        """SSE 流式执行：async for chunk in graph.astream()"""
-        ...
-
-    async def async_run(self, payload, ctx):
-        """异步执行：asyncio.create_task() + 返回 task_id"""
-        ...
+        """懒加载 + 缓存编译后的图（线程安全）"""
+        if self._graph is not None:
+            return self._graph
+        with self._graph_lock:
+            if self._graph is not None:
+                return self._graph
+            # 当前使用 Graph 模式（非 Agent 模式）
+            self._graph = graph_helper.get_graph_instance("graphs.graph")
+            return self._graph
 ```
 
-**三种执行模式对比**：
+**三种执行模式对比**:
 
 | 模式 | 方法 | 返回方式 | 适用场景 |
 |------|------|---------|---------|
 | 同步 | `run()` | 一次性返回完整 JSON | 批量处理、API 调用 |
-| 流式 | `stream_run()` | SSE (text/event-stream) | 实时展示进度 |
-| 异步 | `async_run()` | task_id + 轮询 `GET /task/{id}` | 长时间任务 |
+| 流式 | `stream_sse()` | SSE (`text/event-stream`) | 实时展示进度 |
+| 单节点 | `run_node()` | 一次返回单节点结果 | 调试 |
 
-#### 4.1.2 OpenAI 协议适配
+#### 3.1.2 OpenAI 兼容接口
 
 ```python
 @app.post("/v1/chat/completions")
 async def openai_chat_completions(request: Request):
-    # 1. 解析 OpenAI 格式请求体
-    body = await request.json()
-    messages = body.get("messages", [])
-    stream = body.get("stream", False)
-    session_id = body.get("session_id", str(uuid.uuid4()))
+    """
+    完整兼容 OpenAI Chat Completions API 协议。
 
-    # 2. 通过 OpenAIChatHandler 调用 LangGraph 工作流
-    openai_handler = OpenAIChatHandler()
-    result = openai_handler.handle(
-        model=body.get("model", "test"),
-        messages=messages,
-        session_id=session_id,
-        stream=stream,
-    )
-
-    # 3. 非流式响应：对 content 执行 JSON→Markdown 格式化
-    if isinstance(result, JSONResponse):
-        data = json.loads(result.body)
-        for choice in data.get("choices", []):
-            content = choice["message"]["content"]
-            choice["message"]["content"] = format_teaching_content(content)
-        return JSONResponse(content=data)
-
-    return result  # 流式响应直接返回
+    流程:
+    1. 解析 OpenAI 格式请求 → 提取 messages / model / stream / session_id
+    2. 构建完整 messages（上下文联动，不丢失历史消息）
+    3. 从 extra_body 注入教师参数到 stream_input
+    4. 非流式: service.run() → 提取 final_output → 组装 OpenAI 格式响应
+    5. 流式:   _filtered_stream_generator() → SSE 推送 + 节点进度
+    """
 ```
 
-**关键设计**：`OpenAIChatHandler.handle()` 内部调用 `graph.stream(stream_mode="messages")`，通过 `collect_langgraph_to_response()` 收集所有 AI 节点的文本输出，组装为 OpenAI 格式的 `JSONResponse`。
+**流式过滤策略** (`_filtered_stream_generator`):
 
-#### 4.1.3 路由表
+```
+graph.stream(stream_mode=["messages", "updates"])
+    │
+    ├── updates 模式 → 推送节点完成进度 (node_progress 事件)
+    │   └── format_output 节点的 final_output → OpenAI chunk
+    │
+    └── messages 模式 → LLM token 流
+        └── 只放行 chat_reply 节点（闲聊文本）
+```
+
+**进度事件映射**:
+
+```python
+NODE_PROGRESS_MAP = {
+    "intent_router":        "intent",
+    "rag_enrich":           "retrieving",
+    "chat_reply":           "intent",
+    "generate_lesson_plan": "generating",
+    "simulate_classroom":   "generating",
+    "detect_blindspots":    "generating",
+    "simulate_students":    "generating",
+    "design_interactions":  "generating",
+    "generate_exam":        "generating",
+    "generate_ppt":         "generating",
+    "format_output":        "formatting",
+}
+```
+
+#### 3.1.3 全路由表
 
 | 路由 | 方法 | 说明 |
 |------|------|------|
-| `/` | GET | 返回前端聊天界面 (assets/index.html) |
+| `/` | GET | 前端聊天界面 (`assets/index.html`) |
 | `/health` | GET | 健康检查 `{"status":"ok"}` |
-| `/docs` | GET | Swagger UI API 文档 |
-| `/openapi.json` | GET | OpenAPI 规范 JSON |
+| `/api/teacher-config` | GET | 教师配置选项（学科/年级/风格/模式等） |
+| `/api/knowledge-bases/*` | * | 知识库 CRUD + 文档上传 + 检索 |
 | `/v1/chat/completions` | POST | OpenAI 兼容对话接口 |
 | `/run` | POST | 同步执行工作流 |
 | `/stream_run` | POST | SSE 流式执行 |
 | `/async_run` | POST | 异步执行（返回 task_id） |
 | `/task/{task_id}` | GET | 查询异步任务状态 |
-| `/graph_parameter` | GET | 获取工作流参数定义 |
+| `/cancel/{run_id}` | POST | 取消运行中的任务 |
+| `/node_run/{node_id}` | POST | 单节点调试执行 |
+| `/graph_parameter` | GET | 工作流输入/输出参数 schema |
 
----
-
-### 4.2 全局状态定义 (`graphs/state.py`)
-
-**文件**: `src/graphs/state.py`（约 160 行）
-
-#### 4.2.1 状态体系
-
-```
-TeachingState (全局会话状态, 10 个字段)
-├── subject, grade, grade_level          # 基础信息
-├── teaching_style (TeachingStyle)       # 7 维风格向量
-├── style_description                    # 风格自然语言描述
-├── current_lesson_topic                 # 当前课题
-├── lesson_plan_draft                    # 教案全文
-├── simulation_result                    # 推演结果摘要
-├── last_action                          # 最近操作
-├── workflow_mode                        # 当前工作流
-├── error_count, max_retries             # 重试控制
-├── kb_results (KnowledgeBaseResults)    # KB 检索缓存
-├── validation_errors, validation_passed # 质量校验
-└── messages (Annotated[list, add_messages])  # LangGraph 消息累加器
-
-    ├── LessonPrepState (继承)           # 备课专用字段
-    │   ├── lesson_subject, lesson_topic, lesson_grade
-    │   ├── kb_context, style_profile
-    │   ├── teaching_objectives, key_difficult_points
-    │   ├── teaching_process (list[dict])
-    │   ├── board_design, tiered_exercises, homework_design
-    │   └── final_lesson_plan
-    │
-    ├── SimulationState (继承)           # 推演专用字段
-    │   ├── lesson_overview, stages
-    │   ├── virtual_students (list[dict])
-    │   ├── student_simulations (dict)
-    │   ├── bottlenecks, risk_assessment
-    │   └── optimized_plan, comparison_report
-    │
-    └── GrowthAnalysisState (继承)       # 成长分析专用字段
-        ├── teaching_records, cleaned_data
-        ├── five_dimension_scores (dict)
-        ├── trends, attributions
-        ├── key_events, achievements
-        └── personalized_suggestions, growth_report
-```
-
-#### 4.2.2 7 维教学风格向量
+#### 3.1.4 应用生命周期
 
 ```python
-class TeachingStyle(TypedDict, total=False):
-    compactness: float      # 紧凑度 (0-1): 内容密度和节奏
-    interactivity: float    # 互动度 (0-1): 师生互动偏好
-    depth: float            # 深度 (0-1): 概念深入挖掘偏好
-    interest: float         # 趣味性 (0-1): 趣味元素使用倾向
-    rigor: float            # 严谨度 (0-1): 学术规范要求
-    innovation: float       # 创新度 (0-1): 新方法尝试意愿
-    warmth: float           # 温度 (0-1): 情感关怀偏好
-```
-
-每个维度 0-1 连续值，由风格建模节点从教师历史数据中提取，驱动后续所有节点的个性化输出。
-
-#### 4.2.3 用户变量（跨会话持久化）
-
-```python
-class UserProfile(TypedDict, total=False):
-    teacher_name: str                # 教师姓名
-    subjects_taught: list[str]       # 任教科目
-    grade_taught: str                # 任教年级
-    years_of_experience: int         # 教龄
-    preferred_model: str             # 偏好模型: "pro"/"lite"
-    # historical_lesson_plans: S3 key 列表
-    # teaching_journal: 教学反思日志
-    # growth_history: 五维成长历史快照
+async def lifespan(app: FastAPI):
+    # 启动时
+    engine = get_engine()
+    # 设置 UTC 时区
+    # 初始化 checkpointer (AsyncPostgresSaver / MemorySaver)
+    # 编译 StateGraph
+    sync_graph = compile_graph(base.builder)
+    async_graph = compile_graph(base.builder, checkpointer=checkpointer)
+    # 初始化 AsyncTaskRuntime
+    service.set_graph(sync_graph)
+    yield
+    # 关闭时
+    await async_runtime.shutdown()
 ```
 
 ---
 
-### 4.3 工作流路由 (`graphs/graph.py`)
+### 3.2 工作流引擎 (`graphs/`)
 
-**文件**: `src/graphs/graph.py`（约 25 行）
+#### 3.2.1 图编译入口
+
+**文件**: `graphs/__init__.py` + `graphs/graph.py`
 
 ```python
+# graphs/__init__.py
 class Graph:
+    """Graph 包装器 — 为 main.py 提供 .builder 属性"""
     def __init__(self, workflow: str = "lesson_prep"):
-        self.workflow = workflow
-        self.builder = self._build()
+        self._workflow = workflow
 
     def _build(self):
-        if self.workflow == "lesson_prep":
-            return build_lesson_prep_graph()      # → lesson_prep.py
-        elif self.workflow == "simulation":
-            return build_simulation_graph()        # → teaching_simulation.py
-        elif self.workflow == "growth":
-            return build_growth_analysis_graph()   # → growth_analysis.py
-        else:
-            raise ValueError(f"Unknown workflow: {self.workflow}")
+        from graphs.lesson_prep import build_lesson_prep_graph
+        return build_lesson_prep_graph()  # 只构建这一种图
+
+# graphs/graph.py
+def compile_graph(builder, checkpointer=None):
+    """编译 StateGraph → CompiledStateGraph"""
+    kwargs = {}
+    if checkpointer is not None:
+        kwargs["checkpointer"] = checkpointer
+    return builder.compile(**kwargs)
 ```
 
-`graph_helper.get_graph_instance()` 从 `graphs.graph` 模块中查找 `Graph` 类实例，调用 `graph.builder.compile(checkpointer=...)` 编译为 `CompiledStateGraph`。
+**编译链**: `build_lesson_prep_graph()` 返回 `StateGraph` → `compile_graph()` 编译为 `CompiledStateGraph` → 注入 `checkpointer` 启用状态持久化。
+
+#### 3.2.2 状态定义 (`state.py`)
+
+```python
+class LessonPrepState(TypedDict, total=False):
+    """
+    统一工作流 State — 所有功能模式共享
+
+    字段分类:
+    ┌─────────────────────────────────────────────────────┐
+    │ 对话消息                                             │
+    │   messages: Annotated[list[AnyMessage], add_messages]│
+    │                                                     │
+    │ 意图路由                                             │
+    │   intent: str        # "chat" / 功能模式名           │
+    │   mode: str          # 前端传入的功能模式             │
+    │                                                     │
+    │ 教师输入参数 (前端表单)                                │
+    │   lesson_subject      lesson_topic                   │
+    │   lesson_grade         lesson_objectives              │
+    │   key_points           difficult_points              │
+    │   lesson_duration      style_preference              │
+    │                                                     │
+    │ 中间数据 (各功能节点写入的 JSON)                       │
+    │   _lesson_plan_json     _classroom_sim_json           │
+    │   _blind_spot_json      _student_sim_json            │
+    │   _interaction_json     _exam_json                   │
+    │   _ppt_outline_json                                  │
+    │                                                     │
+    │ RAG                                                   │
+    │   knowledge_base_id    _knowledge_context             │
+    │                                                     │
+    │ 输出                                                 │
+    │   final_output: str    # 最终 Markdown                │
+    └─────────────────────────────────────────────────────┘
+    """
+
+class WorkflowMode:
+    """工作流模式枚举 — 8 种模式"""
+    LESSON_PREP        = "lesson_prep"         # 📋 教案生成
+    CLASSROOM_SIM      = "classroom_sim"       # 🎭 课堂预演
+    BLIND_SPOT         = "blind_spot"          # 🔍 盲区检测
+    STUDENT_SIM        = "student_sim"         # 👥 学情推演
+    INTERACTION_DESIGN = "interaction_design"  # 💬 互动设计
+    EXAM_GEN           = "exam_gen"            # 📝 智能命题
+    PPT_GEN            = "ppt_gen"             # 📊 PPT 大纲
+    CHAT               = "chat"               # 🗨️ 自由对话
+```
+
+**关键设计**:
+- `total=False` — 所有字段可选，节点只需返回自己关心的字段
+- `messages` 使用 `Annotated[list, add_messages]` — LangGraph 自动累加，不会覆盖
+- `_xxx_json` 前缀 — 中间 JSON 数据，供 `format_output` 消费
+- `_knowledge_context` — RAG 节点写入，所有功能节点 System Prompt 中注入
+
+#### 3.2.3 多功能工作流 (`lesson_prep.py`)
+
+**文件**: `src/graphs/lesson_prep.py`（1500 行）— 唯一活跃的 StateGraph。
+
+##### 工作流拓扑
+
+```
+SET_ENTRY: intent_router
+    │
+    ▼
+intent_router ────→ rag_enrich
+                      │
+     ┌────────────────┼────────────────┬────────────┬────────────┬────────────┬────────────┐
+     ▼                ▼                ▼            ▼            ▼            ▼            ▼
+chat_reply    generate_lesson   simulate_     detect_      simulate_    design_      generate_
+                   _plan        classroom    blindspots    students   interactions    exam
+     │                │                │            │            │            │            │
+     │                │                │            │            │            │      ┌─────┘
+     └────────────────┴────────────────┴────────────┴────────────┴────────────┘     ▼
+                                           │                                   generate_ppt
+                                           ▼                                        │
+                                     format_output ←────────────────────────────────┘
+                                           │
+                                           ▼
+                                          END
+```
+
+##### 节点 1: `intent_router` — 意图路由
+
+```python
+def node_intent_router(state: LessonPrepState) -> dict:
+    """
+    路由策略:
+    1. 前端传入 mode → 直接使用（第一优先级）
+    2. 无 mode 但有 lesson_subject/lesson_topic → lesson_prep
+    3. 消息含"备课""教案"关键词 → lesson_prep
+    4. 以上都不满足 → chat
+    """
+    mode = state.get("mode", "")
+
+    if not mode:
+        if state.get("lesson_subject") or state.get("lesson_topic"):
+            mode = WorkflowMode.LESSON_PREP
+        else:
+            # 关键词降级
+            user_input = last_message_content(state).lower()
+            prep_keywords = ["备课", "教案", "教学设计", "课程设计"]
+            mode = WorkflowMode.LESSON_PREP if any(kw in user_input for kw in prep_keywords) else WorkflowMode.CHAT
+
+    return {"intent": mode if mode != WorkflowMode.CHAT else "chat", "mode": mode}
+```
+
+##### 节点 2: `rag_enrich` — RAG 上下文增强
+
+```python
+def node_rag_enrich(state: LessonPrepState) -> dict:
+    """
+    通用 RAG 增强层 — 所有功能模式共享。
+
+    流程:
+    1. 无 knowledge_base_id → 跳过，返回空上下文
+    2. 组合查询: 用户最新消息 + lesson_topic
+    3. 调用 knowledge.embedder.retrieve_context(query, kb_id, top_k=3)
+    4. 拼接为上下文文本，注入后续节点的 System Prompt
+    """
+    kb_id = state.get("knowledge_base_id", "")
+    if not kb_id:
+        return {"_knowledge_context": ""}
+
+    # 构图检索查询
+    query = build_query(state)  # 最新消息 + 课题
+    results = retrieve_context(query, kb_id, top_k=3)
+
+    # 拼接上下文
+    context = "\n\n".join(f"【片段 {i}】\n{r['content']}" for i, r in enumerate(results, 1))
+    return {"_knowledge_context": context}
+```
+
+**RAG 上下文注入模板**（追加到每个功能节点的 System Prompt 末尾）:
+
+```
+【参考资料（来自知识库）】
+{context}
+
+请参考以上资料，确保生成内容与知识库中的信息一致。
+如果知识库内容与你的专业知识有冲突，以知识库为准并标注。
+```
+
+##### 节点 3: 路由分发
+
+```python
+# 路由映射 — 条件边的路径表
+MODE_NODE_MAP = {
+    WorkflowMode.CHAT:              "chat_reply",
+    WorkflowMode.LESSON_PREP:       "generate_lesson_plan",
+    WorkflowMode.CLASSROOM_SIM:     "simulate_classroom",
+    WorkflowMode.BLIND_SPOT:        "detect_blindspots",
+    WorkflowMode.STUDENT_SIM:       "simulate_students",
+    WorkflowMode.INTERACTION_DESIGN: "design_interactions",
+    WorkflowMode.EXAM_GEN:          "generate_exam",
+    WorkflowMode.PPT_GEN:           "generate_ppt",
+}
+
+def route_intent(state: LessonPrepState) -> str:
+    """条件边: 根据 intent 分流到对应功能节点"""
+    return MODE_NODE_MAP.get(state.get("intent", "chat"), "chat_reply")
+```
+
+##### 节点 4-11: 功能生成节点（统一模式）
+
+每个功能节点遵循相同的实现模式：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  1. 创建请求上下文 (new_context)                          │
+│  2. 创建 LLMClient (扣子 SDK)                            │
+│  3. 提取教师参数 (_extract_teacher_params)               │
+│  4. 构建 System Prompt (含 RAG 上下文注入)                │
+│  5. 构建 User Message (_build_user_content)              │
+│  6. LLM 调用 client.invoke(messages, **llm_params)      │
+│  7. JSON 解析 parse_json(response) + 容错                │
+│  8. 写入 state: {"_xxx_json": json.dumps(result)}        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**LLM 参数分配**:
+
+| 节点 | preset | 模型 | temperature | max_tokens |
+|------|--------|------|-------------|------------|
+| chat_reply | `chat` | lite | 0.7 | 500 |
+| generate_lesson_plan | `creative` | pro | 0.7 | 8000 |
+| simulate_classroom | `creative` | pro | 0.7 | 8000 |
+| detect_blindspots | `precise` | lite | 0.3 | 2000 |
+| simulate_students | `creative` | pro | 0.7 | 8000 |
+| design_interactions | `creative` | pro | 0.7 | 8000 |
+| generate_exam | `creative` | pro | 0.7 | 8000 |
+| generate_ppt | `creative` | pro | 0.7 | 8000 |
+
+**教师参数提取**:
+
+```python
+def _extract_teacher_params(state: LessonPrepState) -> dict:
+    """从 state 中提取教师输入参数，构建统一的参数字典"""
+    return {
+        "subject": state.get("lesson_subject", ""),
+        "topic": state.get("lesson_topic", ""),
+        "grade": state.get("lesson_grade", ""),
+        "objectives": state.get("lesson_objectives", ""),
+        "key_points": state.get("key_points", ""),
+        "difficult_points": state.get("difficult_points", ""),
+        "duration": state.get("lesson_duration", 45),
+        "style": state.get("style_preference", ""),
+    }
+```
+
+**各功能节点的 System Prompt 输出结构**:
+
+| 节点 | LLM 输出结构 |
+|------|------------|
+| `generate_lesson_plan` | `{title, subject, grade, standards, objectives(三层), key_difficulties, teaching_process(4+环节), board_design, exercises(三层), homework(三层), reflection_prompts}` |
+| `simulate_classroom` | `{scenarios(4+种情境: 名称/触发点/概率/学生表现/教师风险/应对策略/预防措施), time_risk, overall_risk_level, key_reminder}` |
+| `detect_blindspots` | `{blindspots(4+个: 类型/位置/描述/风险/影响/建议), overall_assessment, priority_fix}` |
+| `simulate_students` | `{student_profiles(优等生/中等生/学困生: 思维路径/卡点/脚手架/替代路径), classroom_dynamics, key_insight}` |
+| `design_interactions` | `{interactions(4+环节: 提问/小组活动/即时评估/过渡话术), icebreaker, overall_tips}` |
+| `generate_exam` | `{exam_meta(总分/时长/难度比例), questions(选择题/填空/判断/简答/应用题), difficulty_summary, exam_tips}` |
+| `generate_ppt` | `{title, slides(12-20页: 标题/版式/要点/内容概要/视觉建议/讲解提示), design_notes}` |
+
+##### 节点 12: `format_output` — 多模式格式化输出
+
+```python
+def node_format_output(state: LessonPrepState) -> dict:
+    """
+    统一格式化输出 — 根据 intent 选择不同的格式化器。
+
+    闲聊 (chat): 直接返回（chat_reply 已通过 messages 流式推送文本）
+    功能模式: JSON → Markdown 转换
+
+    格式化器注册表:
+    """
+    FORMATTERS = {
+        WorkflowMode.LESSON_PREP:        _format_lesson_plan,       # 教案 → 结构化 Markdown
+        WorkflowMode.CLASSROOM_SIM:      _format_classroom_sim,     # 预演 → 情境卡片
+        WorkflowMode.BLIND_SPOT:         _format_blind_spot,        # 盲区 → 风险清单
+        WorkflowMode.STUDENT_SIM:        _format_student_sim,       # 推演 → 学生画像
+        WorkflowMode.INTERACTION_DESIGN: _format_interaction_design, # 互动 → 方案详情
+        WorkflowMode.EXAM_GEN:           _format_exam,              # 命题 → 试卷格式
+        WorkflowMode.PPT_GEN:            _format_ppt_outline,       # PPT → 幻灯片大纲
+    }
+```
+
+**格式化器的核心能力**:
+- JSON dict 递归展开 → Markdown 层级标题
+- 字段名中文化（`FIELD_NAMES` 映射表，296 个键）
+- 列表 → 编号/项目符号列表
+- 嵌套对象 → 子标题 + 缩进
+- 风险等级 → Emoji 标注（🔴🟡🟢）
+- 难度标签 → 颜色标记（🟢基础 🟡提高 🔴挑战）
+- RAG 引用 → 末尾来源标注
+
+##### 图构建代码
+
+```python
+def build_lesson_prep_graph() -> StateGraph:
+    """构建多功能工作流图"""
+    builder = StateGraph(LessonPrepState)
+
+    # 添加全部 12 个节点
+    builder.add_node("intent_router", node_intent_router)
+    builder.add_node("rag_enrich", node_rag_enrich)
+    builder.add_node("chat_reply", node_chat_reply)
+    builder.add_node("generate_lesson_plan", node_generate_lesson_plan)
+    builder.add_node("simulate_classroom", node_simulate_classroom)
+    builder.add_node("detect_blindspots", node_detect_blindspots)
+    builder.add_node("simulate_students", node_simulate_students)
+    builder.add_node("design_interactions", node_design_interactions)
+    builder.add_node("generate_exam", node_generate_exam)
+    builder.add_node("generate_ppt", node_generate_ppt)
+    builder.add_node("format_output", node_format_output)
+
+    # 入口
+    builder.set_entry_point("intent_router")
+
+    # intent_router → rag_enrich (所有请求统一经过 RAG 增强层)
+    builder.add_edge("intent_router", "rag_enrich")
+
+    # rag_enrich → 条件路由到各功能节点
+    route_map = {name: name for name in MODE_NODE_MAP.values()}
+    builder.add_conditional_edges("rag_enrich", route_intent, route_map)
+
+    # 所有功能节点 → format_output → END
+    for node_name in MODE_NODE_MAP.values():
+        builder.add_edge(node_name, "format_output")
+    builder.add_edge("format_output", END)
+
+    return builder
+```
+
+### 3.3 知识库系统 (`knowledge/`)
+
+完整的 RAG 管道，支持从文档上传到语义检索的全流程。
+
+#### 3.3.1 处理管道
+
+```
+文件上传
+  │
+  ▼
+┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+│ 文档解析  │ → │ 文本分块  │ → │ 向量化    │ → │ 向量存储  │
+│ parser   │   │ chunker  │   │ embedder │   │ vector   │
+│          │   │          │   │          │   │ store    │
+│ PDF      │   │ 段落感知  │   │ Embedding│   │ 内存存储  │
+│ Word     │   │ 滑动窗口  │   │ Client   │   │ + 持久化  │
+│ Excel    │   │ ≤500字/块│   │ 10条/批  │   │ JSON文件  │
+│ PPT      │   │ 50字重叠  │   │          │   │          │
+│ TXT/MD   │   │ ≤200块   │   │          │   │          │
+└──────────┘   └──────────┘   └──────────┘   └──────────┘
+
+检索流程
+  │
+  ▼
+┌──────────┐   ┌──────────┐   ┌──────────────────────────┐
+│ Query    │ → │ 余弦相似度 │ → │ [(content, meta, score)] │
+│ 向量化    │   │ Top-K 检索 │   │                          │
+└──────────┘   └──────────┘   └──────────────────────────┘
+```
+
+#### 3.3.2 文档解析器 (`parser.py`)
+
+| 格式 | 解析库 | 方法 |
+|------|--------|------|
+| PDF | `pypdf` | `PdfReader.pages[].extract_text()` |
+| Word | `docx2python` | 递归提取 body 文本 |
+| Excel | `openpyxl` | `load_workbook(read_only=True)` 逐行读取 |
+| PPT | `python-pptx` | 遍历 slides → shapes → paragraphs |
+| TXT/MD | 内置 | UTF-8 解码 |
+
+#### 3.3.3 文本分块器 (`chunker.py`)
+
+```python
+DEFAULT_CHUNK_SIZE = 500      # 每块最大字符数
+DEFAULT_CHUNK_OVERLAP = 50    # 相邻块重叠字符数
+DEFAULT_MAX_CHUNKS = 200      # 单文档最大分块数
+
+def split_into_chunks(text) -> List[dict]:
+    """
+    分块策略:
+    1. 按双换行 (\n\n) 预切分为段落
+    2. 段落 ≤ chunk_size → 合并
+    3. 单段落 > chunk_size → 按中文标点 (。！？；) 再切分
+    4. 相邻块保留 chunk_overlap 字符重叠
+    5. 总块数截断到 max_chunks
+    """
+```
+
+#### 3.3.4 向量化与检索 (`embedder.py`)
+
+```python
+def embed_and_store(kb_id, doc_id, chunks) -> int:
+    """将 chunks 向量化并存入 VectorStore"""
+    embedder = EmbeddingClient()       # 扣子 SDK
+    store = get_vector_store()         # InMemoryVectorStore
+    # 每批 10 条，逐个向量化 + 存储
+
+def retrieve_context(query, kb_id, top_k=3) -> List[dict]:
+    """语义检索"""
+    query_vec = embedder.embed_text(query)
+    results = store.search(query_vec, kb_id=kb_id, top_k=top_k)
+    # 返回 [{"content": str, "score": float, "doc_id": str, "chunk_index": int}]
+```
+
+#### 3.3.5 向量存储 (`vector_store.py`)
+
+```python
+class InMemoryVectorStore(VectorStore):
+    """
+    内存向量存储 — 开发/预览环境方案
+
+    实现细节:
+    - 向量以 numpy array 存储在内存 dict (chunk_id → {embedding, metadata, content, kb_id})
+    - 检索: numpy 余弦相似度 (np.dot / (norm1 * norm2))
+    - 持久化: 序列化为 JSON → .knowledge_vectors/vectors.json
+    - 重启后: 从 JSON 文件反序列化加载
+    - 适用规模: < 10k chunks
+    """
+```
+
+#### 3.3.6 元数据管理 (`store.py`)
+
+使用 JSON 文件（`.knowledge_meta/knowledge_bases.json`）管理：
+
+- **知识库 CRUD**: 创建/列表/获取/删除（含向量级联删除）
+- **文档 CRUD**: 添加/列表/删除（含向量级联删除）
+- **状态追踪**: `processing` → `ready`
+- **chunk 计数**: 自动汇总
 
 ---
 
-### 4.4 智能备课 (`graphs/lesson_prep.py`)
+### 3.4 存储层 (`storage/`)
 
-**文件**: `src/graphs/lesson_prep.py`（约 1100 行）
-
-#### 4.4.1 工作流拓扑
+#### 3.4.1 数据库引擎 (`db.py`)
 
 ```
-用户输入
-   │
-   ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点1: node_parse_requirements()                              │
-│   LLM: doubao-seed-2-0-lite | temperature=0.3 | max_tokens=1000│
-│   输入: messages[-1] + state 已有字段                          │
-│   输出: {"subject":"数学","topic":"二次函数","grade":"初三"...} │
-│   写入: state.subject, state.lesson_topic, state.lesson_hours  │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点2: node_kb_retrieval()                                    │
-│   LLM: doubao-seed-2-0-pro | temperature=0.5 | max_tokens=6000│
-│   并行检索 4 个知识库:                                         │
-│     KB1 课程标准库 → 核心素养框架 + 学段能力要求                │
-│     KB2 教材教参库 → 教材定位 + 教学目标 + 学生困惑             │
-│     KB3 教学法库   → 通用教学策略 + 活动设计 + 差异化建议        │
-│     KB4 教师个人库 → 风格特征 + 有效策略 + 偏好活动              │
-│   输出: 融合后的 kb_context (Markdown)                         │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点3: node_style_modeling()                                  │
-│   LLM: doubao-seed-2-0-pro | temperature=0.5 | max_tokens=4000│
-│   输入: kb_context + 教师历史数据                              │
-│   输出: {"7维教学风格向量":{...},"风格描述":"该教师为混合型..."} │
-│   写入: state.teaching_style, state.style_description         │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点4: node_objective_generation()                            │
-│   LLM: doubao-seed-2-0-pro | temperature=0.5 | max_tokens=4000│
-│   输出: 三层教学目标                                           │
-│     basic:      {knowledge:[...], skill:[...], emotion:[...]} │
-│     intermediate: {knowledge:[...], skill:[...], emotion:[...]}│
-│     advanced:   {knowledge:[...], skill:[...], emotion:[...]} │
-│     core_literacy_links: ["必备品格:...", "关键能力:..."]      │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点5: node_key_difficult_points()                            │
-│   LLM: doubao-seed-2-0-pro | temperature=0.5 | max_tokens=4000│
-│   输出:                                                        │
-│     key_point: {content, reason, strategy}                    │
-│     difficult_points: [{content, reason, breakthrough_strategy,│
-│                         scaffolding}, ...]                     │
-│     common_misconceptions: ["误区1", "误区2", "误区3"]         │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点6: node_teaching_process()                                │
-│   LLM: doubao-seed-2-0-pro | temperature=0.7 | max_tokens=8000│
-│   输出: 5 环节教学过程编排                                     │
-│     [                                                         │
-│       {stage:"导入", duration:5, teacher_activity:"...",      │
-│        student_activity:"...", design_intent:"...",           │
-│        transition:"...", tier_notes:{basic:"...",advanced:"..."}},│
-│       {stage:"新授", duration:20, ...},                        │
-│       {stage:"练习", duration:12, ...},                        │
-│       {stage:"拓展", duration:5, ...},                         │
-│       {stage:"总结", duration:3, ...}                          │
-│     ]                                                         │
-│   每个环节包含: 教师活动、学生活动、设计意图、过渡语、分层要求    │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点7: node_board_design()                                    │
-│   LLM: doubao-seed-2-0-pro | temperature=0.5 | max_tokens=3000│
-│   输出: {main_board:"...", side_board:"...", layout:"..."}    │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点8: node_tiered_exercises()                                │
-│   LLM: doubao-seed-2-0-pro | temperature=0.5 | max_tokens=4000│
-│   输出: {basic:[{question,type,answer_hint,target},...],      │
-│          intermediate:[...], advanced:[...]}                  │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点9: node_homework_design()                                 │
-│   LLM: doubao-seed-2-0-pro | temperature=0.5 | max_tokens=3000│
-│   输出: {required:[{task,estimated_time,purpose},...],        │
-│          optional:[...], challenge:[...], total_time:"..."}   │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点10: node_quality_check()                                  │
-│   LLM: doubao-seed-2-0-pro | temperature=0.3 | max_tokens=3000│
-│   检查: 结构完整性、字段非空、逻辑一致性                         │
-│   重试: 最多 3 次，每次根据错误列表修正                         │
-│   条件路由: validation_passed ? → 节点11 : → 重试节点2-9       │
-└────────┬─────────────────────────────────────────────────────┘
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│ 节点11: node_format_output()                                  │
-│   LLM: doubao-seed-2-0-pro | temperature=0.3 | 无 token 限制   │
-│   输入: state 中所有中间产物 JSON                               │
-│   输出: final_lesson_plan (完整 Markdown 教案)                  │
-│   写入: state.final_lesson_plan                                │
-└──────────────────────────────────────────────────────────────┘
+连接获取优先级链:
+  1. PGDATABASE_URL 环境变量
+  2. coze_workload_identity.Client().get_project_env_vars() 平台注入
+  3. DEV_MODE=1 → SQLite 降级 (/tmp/vibe_coding_dev.db)
+  4. 以上均无 → ValueError
 ```
-
-#### 4.4.2 节点实现模式
-
-每个节点遵循统一模式：
 
 ```python
-def node_xxx(state: LessonPrepState) -> dict:
-    # 1. 获取上下文
-    ctx = request_context.get() or new_context(method="lesson_prep.xxx")
+def _create_engine_with_retry():
+    url = get_db_url()
+    if not url and is_dev_env():
+        return _create_sqlite_fallback()
 
-    # 2. 创建 LLM Client
-    from coze_coding_dev_sdk import LLMClient
-    client = LLMClient(ctx=ctx)
-
-    # 3. 构建 System Prompt + User Message
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_content)
-    ]
-
-    # 4. 调用 LLM
-    response = client.invoke(
-        messages=messages,
-        model="doubao-seed-2-0-pro-260215",
-        temperature=0.5,
-        max_completion_tokens=4000,
-        thinking="disabled"
+    engine = create_engine(
+        url,
+        pool_size=100,          # 连接池大小
+        max_overflow=100,       # 溢出连接数
+        pool_pre_ping=True,     # 连接前自动检测有效性
+        pool_recycle=1800,      # 30 分钟回收
+        pool_timeout=30,        # 获取连接超时
     )
 
-    # 5. 提取文本 + 清理 Markdown 代码块
-    content = _extract_text(response)
-    content = _clean_markdown_fence(content)
-
-    # 6. JSON 解析 + 容错
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
-        parsed = _fallback_parse(content)
-
-    # 7. 返回 state 更新
-    return {"key_difficult_points": parsed, "messages": [AIMessage(content=content)]}
+    # 带重试的连接验证 (最多 20 秒)
+    while elapsed < 20:
+        conn.execute("SELECT 1") → return engine
 ```
 
-**关键细节**：
-- 每个节点通过 `return {"field": value}` 更新 state，LangGraph 自动合并
-- `messages` 字段使用 `Annotated[list, add_messages]` 累加器，所有 AI 消息自动追加
-- `_extract_text()` 处理 `response.content` 可能是 `str` 或 `list[dict]` 的情况
-- `_clean_markdown_fence()` 去除 LLM 输出中包裹的 ```json ... ``` 标记
+#### 3.4.2 状态检查点 (`memory_saver.py`)
+
+LangGraph 状态持久化 — 跨请求对话记忆。
+
+```python
+class MemoryManager:
+    """单例管理 checkpointer 生命周期"""
+
+    def get_checkpointer(self) -> BaseCheckpointSaver:
+        """
+        降级链: AsyncPostgresSaver → MemorySaver
+
+        1. 获取 db_url
+        2. 连接 PostgreSQL → CREATE SCHEMA IF NOT EXISTS memory
+        3. PostgresSaver(conn).setup()  # 自动建表
+        4. 创建 AsyncConnectionPool + AsyncPostgresSaver
+        5. 任何步骤失败 → MemorySaver (内存存储，重启丢失)
+        """
+```
+
+**重试机制**: 2 次尝试，每次 15 秒连接超时，间隔 1 秒。
+
+#### 3.4.3 S3 对象存储 (`s3_storage.py`)
+
+完整的 S3 兼容存储实现（420 行），能力清单：
+
+| 方法 | 功能 | 关键参数 |
+|------|------|---------|
+| `upload_file()` | 单文件上传 | 自动生成唯一 Key |
+| `stream_upload_file()` | 流式分片上传 | `multipart_chunksize=5MB` |
+| `trunk_upload_file()` | 字节迭代器上传 | 显式 Multipart Upload |
+| `upload_from_url()` | 远程 URL 上传 | `timeout=30s` |
+| `read_file()` | 下载为 bytes | — |
+| `delete_file()` | 删除对象 | — |
+| `list_files()` | 前缀过滤 + 分页 | `max_keys≤1000` |
+| `file_exists()` | Head 检查 | — |
+| `generate_presigned_url()` | 临时签名 URL | 默认 30 分钟有效期 |
+
+**安全机制**:
+- `before-call.s3` 事件钩子自动注入 `x-storage-token`
+- `coze_workload_identity` 自动获取访问令牌
+- 文件名校验（长度≤1024 / 允许字符集 / 路径格式）
 
 ---
 
-### 4.5 教学推演 (`graphs/teaching_simulation.py`)
+### 3.5 配置与工具 (`config/` `utils/` `tools/`)
 
-**文件**: `src/graphs/teaching_simulation.py`（约 1100 行）
+#### 3.5.1 LLM 配置 (`config/llm_config.py`)
 
-#### 4.5.1 核心概念：教学"风洞实验室"
-
-模拟 3 类虚拟学生在同一教案下的反应，预测教学效果瓶颈：
-
-```
-教案输入
-   │
-   ▼
-┌─────────────────┐
-│ 节点1: 教案解析   │  提取教学环节、教师行为、预期反应
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点2: 虚拟课堂   │  构建 3 个虚拟学生画像
-│                  │  学生A: 基础层 (知识薄弱、依赖性强)
-│                  │  学生B: 进阶层 (中等水平、偶有困惑)
-│                  │  学生C: 挑战层 (学有余力、思维活跃)
-└────────┬────────┘
-         │
-    ┌────┼────┐
-    ▼    ▼    ▼
-┌──────┐┌──────┐┌──────┐
-│学生A  ││学生B  ││学生C  │  3 路并行 Send (LangGraph)
-│模拟   ││模拟   ││模拟   │  每个学生独立 LLM 调用
-└──┬───┘└──┬───┘└──┬───┘
-   │       │       │
-   └───────┼───────┘
-           ▼
-┌─────────────────┐
-│ 节点6: 结果聚合   │  合并 3 个学生的模拟结果
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点7: 瓶颈识别   │  识别教学瓶颈 + 受影响层级
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点8: 风险评级   │  red / yellow / green 三级
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点9: 预案生成   │  针对每个瓶颈生成教学预案
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点10: 优化建议  │  教案优化建议
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点11: 对比报告  │  优化前后对比
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点12: 格式化输出│  Markdown 推演报告
-└─────────────────┘
-```
-
-#### 4.5.2 3 路并行 Send 实现
+3 种参数预设模板：
 
 ```python
-# 节点2 返回 Send 列表，触发并行执行
-def node_build_virtual_classroom(state: SimulationState) -> dict:
-    students = [
-        {"tier": "basic", "cognitive_profile": "...", "personality": "..."},
-        {"tier": "intermediate", "cognitive_profile": "...", "personality": "..."},
-        {"tier": "advanced", "cognitive_profile": "...", "personality": "..."},
-    ]
-    state["virtual_students"] = students
-    # 返回 Send 列表，每个 Send 触发一次 node_simulate_student
-    return [
-        Send("node_simulate_student", {"student": s, "lesson_overview": state["lesson_overview"]})
-        for s in students
-    ]
+class ModelName:
+    PRO  = "doubao-seed-2-0-pro-260215"   # 旗舰模型
+    LITE = "doubao-seed-2-0-lite-260215"  # 轻量模型
 
-# 每个学生独立模拟
-def node_simulate_student(state: dict) -> dict:
-    student = state["student"]
-    # 独立 LLM 调用，模拟该学生在每个教学环节的反应
-    ...
-    return {"student_key": student["tier"], "result": simulation_result}
-```
-
-#### 4.5.3 虚拟学生模拟维度
-
-每个虚拟学生在每个教学环节模拟以下维度：
-
-| 维度 | 说明 |
-|------|------|
-| `attention` | 注意力水平 (0-100) |
-| `understanding_level` | 理解程度 (0-100) |
-| `inner_monologue` | 内心独白 |
-| `external_behavior` | 外在表现 |
-| `if_called_answer` | 被点名时的回答 |
-| `confusion_points` | 困惑点列表 |
-| `engagement_score` | 参与度 (0-100) |
-
----
-
-### 4.6 成长分析 (`graphs/growth_analysis.py`)
-
-**文件**: `src/graphs/growth_analysis.py`（约 900 行）
-
-#### 4.6.1 工作流拓扑
-
-```
-历史教学数据
-   │
-   ▼
-┌─────────────────┐
-│ 节点1: 数据采集   │  从数据库/S3 拉取历史教案、推演报告、课堂记录
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点2: 数据清洗   │  去重、格式化、时间对齐
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点3-7: 5维评估  │  并行评估 5 个维度:
-│   设计能力        │    教案结构、目标设定、活动设计
-│   课堂执行        │    时间管理、互动质量、应变能力
-│   诊断能力        │    学情判断、错因分析、分层精准度
-│   反馈能力        │    作业评语、课堂点评、激励效果
-│   反思能力        │    教学日志深度、改进措施、成长意识
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点8: 五维聚合   │  加权计算综合成长分
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点9: 趋势分析   │  时间序列分析，识别上升/平台/下降趋势
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点10: 归因分析  │  识别关键影响因素
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点11: 关键事件  │  里程碑事件识别 + 成就发现
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点12: 个性化建议│  针对性成长建议 + 激励寄语
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ 节点13: 格式化输出│  Markdown 成长报告
-└─────────────────┘
-```
-
----
-
-### 4.7 主控 Agent (`agents/agent.py`)
-
-**文件**: `src/agents/agent.py`（约 150 行）
-
-基于 LangChain Agent 框架的意图路由层：
-
-```python
-def create_teaching_agent():
-    tools = [
-        generate_lesson_plan_tool,       # → 智能备课工作流
-        analyze_learning_situation_tool,  # → 学情诊断
-        simulate_teaching_tool,           # → 教学推演工作流
-        classroom_assistant_tool,         # → 课堂实时辅助
-        generate_growth_report_tool,      # → 成长分析工作流
-    ]
-
-    llm = ChatOpenAI(model="doubao-seed-2-0-pro-260215", ...)
-
-    agent = create_react_agent(llm, tools, state_modifier=SYSTEM_PROMPT)
-    return agent
-```
-
-**Agent 模式 vs Graph 模式**：
-
-| 模式 | 触发条件 | 路由方式 | 适用场景 |
-|------|---------|---------|---------|
-| Agent | `graph_helper.is_agent_proj() == True` | LLM 意图识别 → Tool 选择 | 多意图混合输入 |
-| Graph | `graph_helper.is_agent_proj() == False` | 直接进入 StateGraph | 单一明确任务 |
-
-当前项目默认使用 **Graph 模式**。
-
----
-
-### 4.8 存储层 (`storage/`)
-
-#### 4.8.1 数据库引擎 (`storage/database/db.py`)
-
-```python
-def get_engine():
-    global _engine
-    if _engine is None:
-        url = get_db_url()  # PGDATABASE_URL 环境变量
-        if url:
-            _engine = create_engine(url, pool_size=10, ...)
-        elif os.getenv("DEV_MODE") == "1":
-            _engine = _create_sqlite_fallback()  # → /tmp/vibe_coding_dev.db
-        else:
-            raise ValueError("PGDATABASE_URL is not set")
-    return _engine
-```
-
-**连接获取优先级**：
-1. `PGDATABASE_URL` 环境变量
-2. `coze_workload_identity.Client().get_project_env_vars()` 平台注入
-3. `DEV_MODE=1` 时降级 SQLite
-4. 以上均无 → 抛出 `ValueError`
-
-#### 4.8.2 状态检查点 (`storage/memory/memory_saver.py`)
-
-```python
-def get_checkpointer():
-    if os.getenv("DEV_MODE") == "1":
-        return MemorySaver()  # 内存存储，重启丢失
-    else:
-        engine = get_engine()
-        PostgresSaver.setup(engine)  # 自动建表
-        return PostgresSaver(engine)
-```
-
----
-
-### 4.9 JSON→Markdown 格式化引擎
-
-**位置**: `src/main.py` 中的 `format_teaching_content()` 函数（约 120 行）
-
-#### 4.9.1 设计动机
-
-LangGraph 工作流的中间节点输出 JSON 格式的结构化数据，`collect_langgraph_to_response()` 将所有 AI 消息拼接为最终 content。这些混合内容（JSON + Markdown）直接展示给用户体验极差。
-
-#### 4.9.2 实现原理
-
-```
-输入: 混合文本 (JSON 块 + Markdown 块)
-   │
-   ▼
-┌──────────────────────────────────────┐
-│ 1. 正则匹配所有 JSON 块               │
-│    re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text)│
-│                                      │
-│ 2. 逐个 JSON.parse()                 │
-│    - 成功 → 递归转为 Markdown         │
-│    - 失败 → 保留原文                  │
-│                                      │
-│ 3. 递归转换规则:                      │
-│    dict → "**键名**: 值" 逐行输出     │
-│    list → 编号列表                    │
-│    str  → 直接输出                    │
-│    int/float → 直接输出               │
-│                                      │
-│ 4. 键名翻译: KEY_ZH_MAP (296 个映射)  │
-│    "subject" → "学科"                │
-│    "key_point" → "教学重点"           │
-│    "breakthrough_strategy" → "突破策略"│
-│    ...                               │
-│                                      │
-│ 5. 输出: 纯 Markdown 文本             │
-└──────────────────────────────────────┘
-```
-
-#### 4.9.3 翻译映射表（部分）
-
-```python
-KEY_ZH_MAP = {
-    # 课题信息 (7 个)
-    "subject": "学科", "topic": "课题", "grade": "年级",
-    "lesson_hours": "课时", "lesson_type": "课型",
-    "style_preference": "风格偏好", "key_concerns": "关注要点",
-
-    # 教学重难点 (8 个)
-    "key_point": "教学重点", "difficult_points": "教学难点",
-    "common_misconceptions": "常见误区",
-    "content": "内容", "reason": "原因", "strategy": "策略",
-    "breakthrough_strategy": "突破策略", "scaffolding": "脚手架",
-
-    # 教学过程 (10 个)
-    "teaching_process": "教学过程", "stage": "教学环节",
-    "duration": "时长", "teacher_activity": "教师活动",
-    "student_activity": "学生活动", "design_intent": "设计意图",
-    "transition": "过渡语", "tier_notes": "分层要求",
-
-    # 教学目标分层 (9 个)
-    "basic": "基础层", "intermediate": "进阶层", "advanced": "拓展层",
-    "knowledge": "知识目标", "skill": "能力目标", "emotion": "情感目标",
-
-    # 教学推演 (40+ 个)
-    "virtual_students": "虚拟学生", "student_simulations": "学生模拟",
-    "attention": "注意力", "understanding_level": "理解程度",
-    "inner_monologue": "内心独白", "external_behavior": "外在表现",
-    "bottlenecks": "瓶颈分析", "risk_assessment": "风险评估",
-    # ... 共 296 个映射
+LLM_PRESETS = {
+    "precise":  {"model": LITE, "temperature": 0.3, "max_completion_tokens": 2000},
+    "creative": {"model": PRO,  "temperature": 0.7, "max_completion_tokens": 8000},
+    "chat":     {"model": LITE, "temperature": 0.7, "max_completion_tokens": 500},
 }
 ```
 
----
+| 预设 | 模型 | temperature | max_tokens | 适用场景 |
+|------|------|-------------|------------|---------|
+| `precise` | lite | 0.3 | 2000 | 结构化提取（盲区检测） |
+| `creative` | pro | 0.7 | 8000 | 创意生成（教案/推演/命题/PPT） |
+| `chat` | lite | 0.7 | 500 | 闲聊对话 |
 
-### 4.10 前端聊天界面 (`assets/index.html`)
-
-**文件**: `assets/index.html`（约 1500 行，单文件）
-
-#### 4.10.1 技术选型
-
-| 选择 | 理由 |
-|------|------|
-| 零框架 | 避免 npm/webpack 构建链，直接通过 FastAPI StaticFiles 挂载 |
-| marked.js CDN | 轻量 Markdown 解析（~30KB） |
-| highlight.js CDN | 代码语法着色（~50KB） |
-| CSS 变量 + 暗色主题 | 玻璃拟态效果，无预处理器依赖 |
-| Fetch API | 原生异步请求，无 axios 依赖 |
-
-#### 4.10.2 核心交互流程
-
-```
-用户输入 → Enter 或点击发送
-   │
-   ▼
-sendMessage()
-   ├── 创建用户消息气泡
-   ├── 创建 AI 消息占位气泡（含加载动画）
-   ├── POST /v1/chat/completions {stream: false}
-   │     timeout: 300s
-   │
-   ├── 成功:
-   │   ├── 提取 choices[0].message.content
-   │   ├── marked.parse(content) → HTML
-   │   ├── highlight.js 着色代码块
-   │   ├── 添加代码块复制按钮
-   │   └── 打字机动画逐字显示
-   │
-   └── 失败:
-       └── 显示错误提示 + 重试建议
+```python
+def get_llm_params(preset="creative", temperature=None, max_tokens=None, model=None):
+    """获取 LLM 参数，支持字段级覆盖"""
 ```
 
-#### 4.10.3 打字机动画实现
+#### 3.5.2 JSON 解析工具 (`utils/json_parser.py`)
 
-```javascript
-function typewriterEffect(element, html, speed = 30) {
-    // 1. 创建临时 DOM 解析 HTML 结构
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
+统一的容错 JSON 解析入口，消除分散的 try/except：
 
-    // 2. 递归遍历 DOM 树
-    function traverse(node, targetParent) {
-        if (node.nodeType === Node.TEXT_NODE) {
-            // 文本节点：逐字添加
-            const text = node.textContent;
-            for (let i = 0; i < text.length; i++) {
-                targetParent.appendChild(document.createTextNode(text[i]));
-                await sleep(speed);
-            }
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-            // 元素节点：创建对应标签，递归处理子节点
-            const el = document.createElement(node.tagName);
-            for (const child of node.childNodes) {
-                await traverse(child, el);
-            }
-            targetParent.appendChild(el);
-        }
-    }
+```python
+def parse_json(content, default=None, log_context=""):
+    """
+    安全解析 JSON 字符串 — 统一容错入口。
 
-    await traverse(temp, element);
-}
+    处理流程:
+    1. extract_text_from_response() — 兼容 response.content 是 str/list[dict]
+    2. clean_markdown_code_block() — 移除 ```json ... ``` 包裹
+    3. json.loads() — 解析
+    4. 失败 → 返回 default + 记录警告日志
+    """
+```
+
+#### 3.5.3 工具集 (`tools/utility_tools.py`)
+
+```python
+# 提示词管理
+load_prompt(prompt_name)          # 加载提示词模板文件（支持缓存 + 回退）
+format_prompt(prompt_name, **kw)  # 格式化提示词（变量填充）
+
+# RAG 检索
+kb_search(query, kb_type)         # 单知识库检索（4级优先级: 课标→教材→教法→个人）
+kb_multi_search(query)            # 多知识库并发检索
+merge_kb_results(results)         # 合并多库结果
+
+# 格式化辅助
+format_risk_badge(level)          # 风险等级徽章 (🔴🟡🟢)
+format_error_tier(tier)           # 错因层级标签 (L1/L2/L3)
+format_radar_chart_text(dims)     # ASCII 艺术风格雷达图
+format_student_name(index, tier)  # 化名学生姓名
 ```
 
 ---
 
-## 5. API 接口规范
+### 3.6 API 路由 (`api/`)
 
-### 5.1 OpenAI 兼容接口
+#### 3.6.1 知识库 API (`api/knowledge.py`)
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/knowledge-bases` | GET | 列出所有知识库 |
+| `/api/knowledge-bases` | POST | 创建知识库（`name` + `description`） |
+| `/api/knowledge-bases/{kb_id}` | DELETE | 删除知识库（含向量级联清理） |
+| `/api/knowledge-bases/{kb_id}/documents` | GET | 列出知识库文档 |
+| `/api/knowledge-bases/{kb_id}/upload` | POST | 上传文档 → 自动解析→分块→向量化 |
+| `/api/knowledge-bases/{kb_id}/documents/{doc_id}` | DELETE | 删除文档（含向量级联清理） |
+| `/api/knowledge-bases/{kb_id}/search` | POST | 语义检索（`query` + `top_k`） |
+
+**上传流程**: 文件校验 → `extract_text()` → `split_into_chunks()` → `add_document(status="processing")` → `embed_and_store()` → `update_document_status("ready")`
+
+---
+
+## 4. API 接口规范
+
+### 4.1 OpenAI 兼容接口
 
 ```bash
 POST /v1/chat/completions
 Content-Type: application/json
 
 {
-  "model": "test",                    # 模型标识（内部路由用）
+  "model": "jiao-si",
   "messages": [
-    {"role": "user", "content": "帮我备一节数学课"}
+    {"role": "user", "content": "帮我备一节初三数学二次函数的课"}
   ],
-  "stream": false,                    # false: 完整返回; true: SSE 流式
-  "session_id": "optional-session-id" # 可选，用于会话状态恢复
+  "stream": false,
+  "session_id": "optional-session-id",
+  "extra_body": {
+    "mode": "lesson_prep",
+    "lesson_subject": "数学",
+    "lesson_grade": "初三",
+    "lesson_topic": "二次函数",
+    "lesson_duration": 45,
+    "style_preference": "启发式互动型",
+    "lesson_objectives": "掌握二次函数图像性质",
+    "key_points": "二次函数顶点式与图像变换",
+    "difficult_points": "参数a,b,c对图像的影响",
+    "knowledge_base_id": "kb-xxx"
+  }
 }
 ```
 
-**非流式响应** (`stream: false`)：
+**extra_body 参数**:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `mode` | string | 功能模式（不传则后端自动识别） |
+| `lesson_subject` | string | 学科 |
+| `lesson_grade` | string | 年级 |
+| `lesson_topic` | string | 课题名称 |
+| `lesson_objectives` | string | 教学目标 |
+| `key_points` | string | 教学重点 |
+| `difficult_points` | string | 教学难点 |
+| `lesson_duration` | int | 课时时长（分钟），默认 45 |
+| `style_preference` | string | 教学风格 |
+| `knowledge_base_id` | string | 知识库 ID（RAG 增强） |
+
+**非流式响应**:
 
 ```json
 {
   "id": "chatcmpl-xxx",
   "object": "chat.completion",
   "created": 1234567890,
-  "model": "test",
+  "model": "jiao-si",
   "choices": [{
     "index": 0,
     "message": {
       "role": "assistant",
-      "content": "# 数学教案\n\n## 课题信息\n- **学科**: 数学\n- **课题**: 二次函数\n..."
+      "content": "# 📋 二次函数\n\n## 课题信息\n..."
     },
     "finish_reason": "stop"
   }]
 }
 ```
 
-### 5.2 内部 API
-
-| 接口 | 方法 | Content-Type | 说明 |
-|------|------|-------------|------|
-| `/run` | POST | `application/json` | 同步执行，返回完整 state |
-| `/stream_run` | POST | `application/json` | SSE 流式，`text/event-stream` |
-| `/async_run` | POST | `application/json` | 异步执行，返回 `{"task_id":"..."}` |
-| `/task/{task_id}` | GET | — | 查询异步任务状态 |
-| `/health` | GET | — | `{"status":"ok"}` |
-| `/graph_parameter` | GET | — | 工作流输入参数 schema |
-
----
-
-## 6. 完整数据流
-
-### 6.1 智能备课请求全链路
+**流式响应 (SSE)**:
 
 ```
-1. 用户输入 "帮我备一节数学课"
-         │
-2. POST /v1/chat/completions  (stream: false)
-         │
-3. openai_chat_completions()
-   ├── 解析请求体 → messages, session_id, stream
-   ├── 创建 OpenAIChatHandler 实例
-   └── handler.handle(model, messages, session_id, stream=False)
-         │
-4. OpenAIChatHandler._handle_non_stream()
-   ├── 构建 payload: {messages: [{role:"user", content:"..."}]}
-   ├── 获取编译后的图: graph_helper.get_graph_instance()
-   ├── 初始化运行配置: init_run_config(graph, ctx)
-   └── graph.stream(payload, config, stream_mode="messages")
-         │
-5. LangGraph 流式执行 (11 个节点依次执行)
-   ├── 节点1: LLM 调用 → {"subject":"数学","topic":"二次函数",...}
-   ├── 节点2: LLM 调用 → KB 检索上下文 (Markdown)
-   ├── 节点3: LLM 调用 → 7维风格向量
-   ├── 节点4: LLM 调用 → 三层教学目标
-   ├── 节点5: LLM 调用 → 重难点分析
-   ├── 节点6: LLM 调用 → 5环节教学过程
-   ├── 节点7: LLM 调用 → 板书设计
-   ├── 节点8: LLM 调用 → 分层练习
-   ├── 节点9: LLM 调用 → 作业设计
-   ├── 节点10: LLM 调用 → 质量校验 (最多3次重试)
-   └── 节点11: LLM 调用 → final_lesson_plan (Markdown)
-         │
-6. collect_langgraph_to_response()
-   ├── 遍历 stream 中的每个 chunk
-   ├── 提取所有 AI 消息的 content
-   └── 拼接为完整文本 (JSON + Markdown 混合)
-         │
-7. 返回 JSONResponse → openai_chat_completions()
-         │
-8. format_teaching_content(content)
-   ├── 正则匹配 JSON 块 → JSON.parse()
-   ├── 递归转为 Markdown (dict→键值对, list→编号列表)
-   ├── KEY_ZH_MAP 翻译键名 (296 个映射)
-   └── 返回纯 Markdown 文本
-         │
-9. 更新 choices[0].message.content → 新的 JSONResponse
-         │
-10. 前端接收
-    ├── marked.parse(markdown) → HTML
-    ├── highlight.js 着色代码块
-    ├── 添加复制按钮
-    └── 打字机动画逐字显示
+event: node_progress
+data: {"node":"intent_router","progress_id":"intent","status":"completed"}
+
+event: node_progress
+data: {"node":"generate_lesson_plan","progress_id":"generating","status":"completed"}
+
+event: node_progress
+data: {"node":"format_output","progress_id":"formatting","status":"completed"}
+
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"role":"assistant"},"index":0}]}
+
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{"content":"# 📋 二次函数\n\n..."},"index":0}]}
+
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"delta":{},"finish_reason":"stop","index":0}]}
+
+data: [DONE]
 ```
 
-### 6.2 时间线估算
-
-| 阶段 | 耗时 | 说明 |
-|------|------|------|
-| 请求解析 | < 10ms | JSON 解析 + 路由 |
-| 图编译 | < 100ms | 首次懒加载，后续缓存 |
-| 节点1-11 LLM 调用 | 60-120s | 11 次 LLM API 调用（每次 2-10s） |
-| 响应收集 | < 10ms | 文本拼接 |
-| JSON→MD 格式化 | < 100ms | 纯 CPU 正则 + 递归 |
-| 前端渲染 | < 500ms | marked.js + highlight.js + 打字机 |
-| **总计** | **60-120s** | 主要瓶颈在 LLM API 调用 |
-
----
-
-## 7. 运行与部署
-
-### 7.1 本地开发
+### 4.2 教师配置 API
 
 ```bash
-# 1. 进入项目目录
-cd projects
-
-# 2. 安装依赖
-bash scripts/setup.sh
-# 等价于: uv sync
-
-# 3. 启动服务
-export DEV_MODE=1
-export PYTHONPATH="src:$PYTHONPATH"
-source .venv/bin/activate
-python src/main.py -m http -p 5000
-
-# 4. 验证
-curl http://localhost:5000/health
-# → {"status":"ok"}
-
-# 5. 访问
-# 前端界面: http://localhost:5000/
-# API 文档:  http://localhost:5000/docs
+GET /api/teacher-config
 ```
 
-### 7.2 预览模式（扣子平台）
-
-点击平台「预览」按钮，自动执行 `.coze` 中定义的命令：
-
-```toml
-[dev]
-build = ["bash", "projects/scripts/setup.sh"]   # uv sync
-run   = ["bash", "projects/scripts/http_run.sh"]  # 启动 HTTP 服务
-```
-
-`http_run.sh` 自动设置 `DEV_MODE=1`，启用数据库降级。
-
-### 7.3 生产部署
-
-```toml
-[deploy]
-build = ["bash", "projects/scripts/setup.sh"]
-run   = ["bash", "projects/scripts/http_run.sh"]
-```
-
-生产环境需配置：
-
-| 环境变量 | 说明 | 必填 |
-|---------|------|------|
-| `PGDATABASE_URL` | PostgreSQL 连接串 | 生产必填 |
-| `DEV_MODE` | 设为 `1` 启用降级 | 开发用，生产不设 |
-
----
-
-## 8. 配置体系
-
-### 8.1 `.coze` 双文件体系
-
-| 文件 | 位置 | 关键字段 |
-|------|------|---------|
-| 根 `.coze` | `/workspace/projects/.coze` | `project_type`, `preview_enable`, `[dev]`, `[deploy]`, `[subprojects]` |
-| 子项目 `.coze` | `/workspace/projects/projects/.coze` | `sub_id`, `name`, `project_type`, `preview_enable` |
-
-根 `.coze` 是平台唯一读取入口，子项目 `.coze` 记录项目自身元信息。两者 `project_type` 和 `preview_enable` 必须一致。
-
-### 8.2 LLM 配置 (`config/agent_llm_config.json`)
+返回前端表单所需的所有下拉选项：
 
 ```json
 {
-  "config": {
-    "model": "doubao-seed-2-0-pro-260215",
-    "temperature": 0.7,
-    "timeout": 600,
-    "thinking": "disabled"
-  },
-  "sp": "你是教思AI教学助手，专注于为教师提供..."
+  "subjects": ["语文","数学","英语","物理","化学","生物","历史","地理","政治","体育","音乐","美术","信息技术"],
+  "grades": ["一年级","二年级","三年级","四年级","五年级","六年级","初一","初二","初三","高一","高二","高三"],
+  "objectives": ["知识与技能","过程与方法","情感态度与价值观","核心素养导向","综合能力培养"],
+  "key_points": ["概念理解","公式推导","方法掌握","技能训练","思维培养","知识应用"],
+  "difficult_points": ["抽象概念理解","复杂计算","逻辑推理","知识迁移","综合应用","创新思维"],
+  "durations": [20,30,40,45,60,90],
+  "styles": ["启发式互动型","系统讲授型","情感体验型","任务驱动型","混合型"],
+  "modes": [
+    {"id":"lesson_prep","name":"教案生成","icon":"📋","desc":"生成完整结构化教案"},
+    {"id":"classroom_sim","name":"课堂预演","icon":"🎭","desc":"预判课堂意外情境与应对"},
+    {"id":"blind_spot","name":"盲区检测","icon":"🔍","desc":"发现教案中的逻辑漏洞"},
+    {"id":"student_sim","name":"学情推演","icon":"👥","desc":"模拟不同学生的思维路径"},
+    {"id":"interaction_design","name":"互动设计","icon":"💬","desc":"设计师生互动方案和话术"},
+    {"id":"exam_gen","name":"智能命题","icon":"📝","desc":"一键生成结构化试题"},
+    {"id":"ppt_gen","name":"PPT大纲","icon":"📊","desc":"一键生成PPT课件大纲"},
+    {"id":"chat","name":"自由对话","icon":"🗨️","desc":"闲聊或提问"}
+  ]
 }
 ```
 
-### 8.3 可用模型（扣子平台免费额度）
-
-| 模型 ID | 类型 | 特点 | 适用场景 |
-|---------|------|------|---------|
-| `doubao-seed-2-0-pro-260215` | 旗舰 | 复杂推理、多模态 | 备课/推演/分析主流程 |
-| `doubao-seed-2-0-lite-260215` | 均衡 | 性能与成本平衡 | 需求解析、格式化 |
-| `doubao-seed-2-0-mini-260215` | 轻量 | 低延迟、高并发 | 简单任务 |
-| `deepseek-v3-2-251201` | 通用 | 平衡推理与输出 | 通用对话 |
-| `kimi-k2-5-260127` | 多模态 | Agent 能力强 | 复杂 Agent 任务 |
-
 ---
 
-## 9. 开发降级方案
+## 5. 运行与部署
 
-当 `DEV_MODE=1` 时，系统自动启用以下降级：
+### 5.1 本地开发
+
+```bash
+cd projects
+bash scripts/setup.sh                  # uv sync 安装依赖
+export DEV_MODE=1                      # 启用数据库降级
+source .venv/bin/activate
+python src/main.py -m http -p 5000
+
+# 验证
+curl http://localhost:5000/health      # → {"status":"ok"}
+
+# 命令行模式测试
+python src/main.py -m flow -i '{
+  "messages":[{"role":"user","content":"帮我备一节数学课"}],
+  "lesson_subject":"数学","lesson_topic":"二次函数","lesson_grade":"初三"
+}'
+```
+
+### 5.2 平台预览
+
+点击平台「预览」按钮，自动执行：
+
+```toml
+[dev]
+build = ["bash", "scripts/setup.sh"]     # uv sync
+run   = ["bash", "scripts/http_run.sh"]   # 启动 HTTP 服务
+```
+
+`http_run.sh` 自动处理：检测部署环境、设置 `DEV_MODE=1`、清理端口残留、激活虚拟环境。
+
+### 5.3 生产部署
+
+```bash
+# 生产环境需配置 PostgreSQL
+export PGDATABASE_URL="postgresql://user:pass@host:5432/dbname"
+
+# 可选 S3 存储
+export COZE_BUCKET_ENDPOINT_URL="https://s3.example.com"
+export COZE_BUCKET_NAME="jiao-si-storage"
+```
+
+### 5.4 关键环境变量
+
+| 变量 | 说明 | 必填 |
+|------|------|------|
+| `PGDATABASE_URL` | PostgreSQL 连接串 | 生产必填 |
+| `DEV_MODE` | 设为 `1` 启用 SQLite + MemorySaver 降级 | 开发用 |
+| `COZE_PROJECT_ENV` | 项目环境标识 (`DEV`/`PROD`) | 平台注入 |
+| `COZE_WORKSPACE_PATH` | 工作空间路径 | 平台注入 |
+| `COZE_BUCKET_ENDPOINT_URL` | S3 存储端点 | 选填 |
+| `COZE_BUCKET_NAME` | S3 Bucket | 选填 |
+| `COZE_LOOP_API_TOKEN` | Coze 工作流 API Token | PPT 生成需要 |
+| `DEPLOY_RUN_PORT` | HTTP 服务端口，默认 5000 | 选填 |
+
+### 5.5 降级方案
+
+`DEV_MODE=1` 时自动启用：
 
 | 组件 | 生产环境 | 开发降级 | 影响 |
 |------|---------|---------|------|
-| 数据库引擎 | PostgreSQL (SQLAlchemy) | SQLite (`/tmp/vibe_coding_dev.db`) | 数据不跨会话持久化 |
-| 状态检查点 | PostgresSaver | MemorySaver (内存) | 重启后 LangGraph 状态丢失 |
-| LLM 调用 | 扣子平台 API | 同生产（免费额度） | 无影响 |
-| 端口 | 5000 | 5000 | 无影响 |
-
-**降级触发条件**：
-1. `DEV_MODE=1` 环境变量已设置
-2. `PGDATABASE_URL` 未配置或为空
+| 数据库引擎 | PostgreSQL | SQLite (`/tmp/vibe_coding_dev.db`) | 数据不跨会话持久化 |
+| 状态检查点 | AsyncPostgresSaver | MemorySaver | 重启后对话历史丢失 |
+| 向量存储 | (可替换为 pgvector) | InMemoryVectorStore | < 10k chunks，JSON 文件持久化 |
+| LLM 调用 | 扣子平台 API | 同生产 | 无影响 |
 
 ---
 
-## 10. 常见问题
+## 6. 技术栈清单
 
-### Q1: 预览显示 `{"detail":"Not Found"}`
-**原因**: 根路径 `/` 未定义路由或静态文件未挂载。
-**解决**: 确认 `main.py` 中有 `app.mount("/", StaticFiles(...))` 和 `assets/index.html` 存在。
+### 核心框架
 
-### Q2: 对话接口超时（60-120 秒无响应）
-**原因**: 智能备课涉及 11 次 LLM 调用，总耗时 60-120 秒。
-**解决**: 前端超时设为 300 秒；使用 `stream: true` 获取实时进度反馈。
-
-### Q3: 输出显示原始 JSON 而非 Markdown
-**原因**: 前端使用 `stream: true` 绕过了 `format_teaching_content()`。
-**解决**: 使用 `stream: false` 确保后端格式化生效。
-
-### Q4: `PGDATABASE_URL is not set`
-**原因**: 未配置数据库连接串。
-**解决**: 设置 `DEV_MODE=1` 启用 SQLite 降级；或配置真实 PostgreSQL 连接串。
-
-### Q5: `ModuleNotFoundError: No module named 'coze_coding_utils.xxx'`
-**原因**: 依赖未安装或版本不兼容。
-**解决**: 运行 `bash scripts/setup.sh` 重新安装。如遇 `pycairo` 编译失败，从 `pyproject.toml` 移除该依赖（后端服务不需要 GUI 库）。
-
-### Q6: 如何切换工作流？
-**解决**: 修改 `src/graphs/graph.py` 中的默认 workflow 参数：
-```python
-_wrapper = _GraphWrapper(workflow="simulation")  # 教学推演
-_wrapper = _GraphWrapper(workflow="growth")      # 成长分析
-```
-
-### Q7: 输出中部分字段仍显示英文
-**原因**: `KEY_ZH_MAP` 中缺少对应键的翻译。
-**解决**: 在 `src/main.py` 的 `KEY_ZH_MAP` 字典中添加映射。当前已覆盖 296 个键。
-
----
-
-## 附录
-
-### A. 依赖清单
-
-核心依赖（`pyproject.toml`）：
-
-```
-fastapi>=0.115.0
-uvicorn[standard]>=0.34.0
-langgraph>=0.6.0
-langchain>=0.3.0
-langchain-core>=0.3.0
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
-coze-coding-utils
-coze-coding-dev-sdk
-python-dotenv>=1.0.0
-```
-
-### B. 端口约定
-
-| 端口 | 用途 | 备注 |
+| 技术 | 版本 | 用途 |
 |------|------|------|
-| 5000 | HTTP 服务 | 唯一对外端口 |
-| 9000 | 系统保留 | 禁止使用 |
+| **Python** | ≥3.12 | 主语言 |
+| **FastAPI** | ≥0.121 | HTTP 路由、中间件、OpenAPI 文档 |
+| **Uvicorn** | ≥0.38 | ASGI 异步 HTTP 服务器 |
+| **LangGraph** | 1.0.2 | StateGraph 工作流编排、条件路由 |
+| **LangChain** | 1.0.3 | 消息类型 (SystemMessage/HumanMessage/AIMessage) |
+| **coze-coding-dev-sdk** | >0.5.0 | LLM Client + Embedding Client |
+| **coze-coding-utils** | 0.2.8 | GraphService、OpenAI 适配、流式处理、日志 |
+| **coze-workload-identity** | ≥0.1.4 | Workload Identity 令牌获取 |
 
-### C. 编码规范
+### 数据层
 
-- Python: 遵循 PEP 8，4 空格缩进
-- 节点函数命名: `node_<功能描述>` (如 `node_parse_requirements`)
-- 工作流构建函数: `build_<场景>_graph()` (如 `build_lesson_prep_graph`)
-- State 类: 继承 `TeachingState`，`total=False` 允许部分字段
-- 日志: 使用 `logging.getLogger(__name__)`，格式 `[模块-节点] 描述`
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **SQLAlchemy** | ≥2.0 | ORM + 连接池 |
+| **PostgreSQL** | 16+ | 生产数据库 |
+| **SQLite** | 3.x | 开发降级 |
+| **langgraph-checkpoint-postgres** | ≥3.0 | LangGraph 状态 PG 持久化 |
+| **psycopg[binary]** | ≥3.3 | PostgreSQL 异步驱动 |
+| **psycopg-pool** | ≥3.3 | PostgreSQL 异步连接池 |
+| **boto3** | ≥1.40 | S3 兼容对象存储 |
+| **Pydantic** | ≥2.12 | 数据验证 |
+
+### 知识库与文档
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **pypdf** | ≥6.4 | PDF 文本提取 |
+| **docx2python** | ≥3.5 | Word 文档解析 |
+| **openpyxl** | ≥3.1 | Excel 数据读取 |
+| **python-pptx** | ≥1.0 | PPT 文本提取 |
+| **numpy** | — | 余弦相似度向量检索 |
+| **chardet** | ≥5.2 | 文件编码检测 |
+
+### 前端
+
+| 技术 | 说明 |
+|------|------|
+| **原生 HTML/CSS/JS** | 零构建依赖，单文件部署 |
+| **marked.js** 15+ (CDN) | Markdown → HTML |
+| **highlight.js** 11+ (CDN) | 代码语法着色 |
+
+### 开发与部署
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **uv** | 0.5+ | Python 包管理 |
+| **python-dotenv** | ≥1.2 | .env 加载 |
+| **Jinja2** | ≥3.1 | 模板引擎（预留） |
+| **alembic** | ≥1.16 | 数据库迁移（预留） |
+
+---
+
+## 7. 开发指南
+
+### 7.1 添加新的功能模式
+
+1. **在 `state.py` 中定义中间数据字段**:
+```python
+class LessonPrepState(TypedDict, total=False):
+    _new_feature_json: str  # 功能节点写入的中间 JSON
+```
+
+2. **在 `lesson_prep.py` 中添加 System Prompt + 生成节点**:
+```python
+NEW_FEATURE_SYSTEM_PROMPT = """你是...严格按以下 JSON 结构输出..."""
+
+def node_generate_new_feature(state: LessonPrepState) -> dict:
+    ctx = request_context.get() or new_context(method="new_feature.generate")
+    client = LLMClient(ctx=ctx)
+    params = _extract_teacher_params(state)
+    # RAG 上下文注入
+    system_prompt = NEW_FEATURE_SYSTEM_PROMPT
+    if state.get("_knowledge_context"):
+        system_prompt += KNOWLEDGE_CONTEXT_TEMPLATE.format(context=state["_knowledge_context"])
+    # LLM 调用 + JSON 解析
+    response = client.invoke(...)
+    result = parse_json(response, ...)
+    return {"_new_feature_json": json.dumps(result, ensure_ascii=False)}
+```
+
+3. **添加 Markdown 格式化器**:
+```python
+def _format_new_feature(data: dict) -> str:
+    md = []
+    # JSON → Markdown 递归转换
+    return "\n".join(md)
+```
+
+4. **注册到三张映射表**:
+```python
+MODE_NODE_MAP["new_feature"] = "generate_new_feature"
+FORMATTERS["new_feature"] = _format_new_feature
+MODE_DATA_FIELD["new_feature"] = "_new_feature_json"
+```
+
+5. **在 `build_lesson_prep_graph()` 中注册节点和边**:
+```python
+builder.add_node("generate_new_feature", node_generate_new_feature)
+builder.add_edge("generate_new_feature", "format_output")
+```
+
+6. **在 `state.py` 的 `WorkflowMode` 中添加常量，在 `main.py` 的 `TEACHER_CONFIG["modes"]` 中添加前端入口**。
+
+### 7.2 扩展向量存储
+
+实现 `VectorStore` 抽象接口即可替换实现：
+
+```python
+class PgVectorStore(VectorStore):
+    def add_vectors(self, ids, embeddings, metadatas, contents, kb_id):
+        # INSERT INTO vectors ...
+    def search(self, query_embedding, kb_id, top_k):
+        # SELECT ... ORDER BY embedding <=> $1 LIMIT top_k
+    def delete_by_kb(self, kb_id): ...
+    def delete_by_doc(self, kb_id, doc_id): ...
+    def count(self, kb_id): ...
+
+# 替换全局实例
+def get_vector_store():
+    return PgVectorStore()
+```
+
+### 7.3 编码规范
+
+| 规范 | 说明 |
+|------|------|
+| Python | PEP 8，4 空格缩进 |
+| 节点函数 | `node_<功能描述>`，如 `node_generate_lesson_plan` |
+| 格式化器 | `_format_<模式名>`，如 `_format_lesson_plan` |
+| 图构建 | `build_<场景>_graph()`，如 `build_lesson_prep_graph` |
+| JSON 解析 | 统一使用 `parse_json()`，不手写 try/except |
+| State 更新 | 通过 `return {"field": value}` 机制 |
+| 日志格式 | `[模块-节点] 描述`，如 `[教案生成] 开始` |
+
+### 7.4 调试
+
+```bash
+# 单节点调试
+curl -X POST http://localhost:5000/node_run/generate_lesson_plan \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"debug","lesson_subject":"数学","lesson_topic":"二次函数","lesson_grade":"初三"}'
+
+# 查看工作流结构
+curl http://localhost:5000/graph_parameter
+
+# 命令行完整运行
+python src/main.py -m flow -i '{"messages":[{"role":"user","content":"你好"}]}'
+```
+
+---
+
+<div align="center">
+
+**「教思」— 教之以思，而非教之以器**
+
+</div>
