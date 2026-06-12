@@ -20,8 +20,15 @@ ensure_uv() {
   echo "[run] uv installed: $(uv --version)"
 }
 
-# 开发/预览环境标识，启用数据库降级
-export DEV_MODE="1"
+# 检测是否为部署环境（只读文件系统 或 PIP_TARGET 已设置）
+is_deploy_env() {
+  [ -n "${PIP_TARGET:-}" ] || [ ! -w "${PROJECT_DIR}" ]
+}
+
+# 开发/预览环境标识，启用数据库降级（部署环境不设置）
+if ! is_deploy_env; then
+  export DEV_MODE="1"
+fi
 
 usage() {
   echo "用法: $0 -p <端口>"
@@ -54,8 +61,11 @@ sleep 1
 # 激活 .venv（devbox 环境），deploy 无 .venv 则跳过
 if [ -f "${PROJECT_DIR}/.venv/bin/activate" ]; then
   source "${PROJECT_DIR}/.venv/bin/activate"
+elif is_deploy_env; then
+  # 部署环境：依赖已通过 PIP_TARGET 安装到系统路径，无需 .venv
+  echo "[run] Deploy mode detected, skipping .venv"
 else
-  # .venv 不存在（沙箱重置后），自动安装依赖
+  # .venv 不存在且非部署环境（沙箱重置后），自动安装依赖
   echo "[run] .venv not found, running setup first..."
   ensure_uv
   if [ -f "uv.lock" ]; then
